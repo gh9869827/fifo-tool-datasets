@@ -16,7 +16,14 @@ class ConversationRecord(TypedDict):
     role: Role
     content: str
 
-class Conversation(DatasetAdapter):
+TAG_TO_ROLE = {
+    ">": "user",
+    "<": "assistant",
+    "$": "system",
+    "!": "directives"
+}
+
+class ConversationAdapter(DatasetAdapter):
     """
     Adapter for handling multi-turn conversation datasets.
 
@@ -84,6 +91,7 @@ class Conversation(DatasetAdapter):
             {"role": "assistant", "content": "1200 feet is equal to 365.76 meters."}
         ]}]
     """
+
     def _from_dat_to_wide_dataset(self, dat_filename: str) -> Dataset:
         """
         Parses a conversation DAT file into a wide-format Hugging Face Dataset.
@@ -106,23 +114,32 @@ class Conversation(DatasetAdapter):
             content: list[str]
 
         data: RawDataDict = {
-                "id_conversation": [],
-                "id_message": [],
-                "role" : [],
-                "content": []
-            }
+            "id_conversation": [],
+            "id_message": [],
+            "role": [],
+            "content": []
+        }
+
         id_conversation, id_message = 0, 0
         role, content = None, None
 
-        i = 0
+        line_number = 0
         with open(dat_filename, "r", encoding="utf-8") as f:
             prev_tag = None
             for line in f:
-                i += 1
+                line_number += 1
                 line = line.rstrip("\r\n")
 
                 if re.match(r'^(---|>|<|\$|\!)\s+$', line) is not None:
-                    raise ValueError(f"Error: $ ! --- > or < followed by spaces, line {i}")
+                    raise ValueError(f"Error: $ ! --- > or < followed by spaces, "
+                                     f"line {line_number}")
+
+                if prev_tag is not None and line in ["---", ">", "<", "$", "!"]:
+                    if content is None:
+                        raise ValueError(
+                            f"Empty tag '{prev_tag}' detected at conversation {id_conversation}, "
+                            f"message {id_message}, line {line_number}"
+                        )
 
                 if content is not None and line in ["---", ">", "<", "$", "!"]:
                     assert role is not None
@@ -131,31 +148,23 @@ class Conversation(DatasetAdapter):
                     data["role"].append(role)
                     data["content"].append(content)
 
+                if line in [">", "<"] and prev_tag == line:
+                    raise ValueError(
+                        f"Two consecutive '{line}' tags detected at conversation "
+                        f"{id_conversation}, message {id_message}, line {line_number}"
+                    )
+
                 if line == "---":
+                    if id_conversation > 0 and (content is None and prev_tag is None):
+                        raise ValueError(f"Conversation {id_conversation} is empty, "
+                                         f"line {line_number}")
                     id_conversation += 1
                     id_message = 0
                     content = None
                     prev_tag = None
-                elif line == ">":
-                    assert prev_tag != ">"
+                elif line in TAG_TO_ROLE:
                     id_message += 1
-                    role = "user"
-                    content = None
-                    prev_tag = line
-                elif line == "<":
-                    assert prev_tag != "<"
-                    id_message += 1
-                    role = "assistant"
-                    content = None
-                    prev_tag = line
-                elif line == "$":
-                    id_message += 1
-                    role = "system"
-                    content = None
-                    prev_tag = line
-                elif line == "!":
-                    id_message += 1
-                    role = "directives"
+                    role = TAG_TO_ROLE[line]
                     content = None
                     prev_tag = line
                 else:
@@ -164,8 +173,12 @@ class Conversation(DatasetAdapter):
                     else:
                         content = f"{content}\n{line}"
 
+        if prev_tag is not None:
+            raise ValueError(f"Conversation {id_conversation} is "
+                             f"not closed properly, last line {line_number}")
+
         # Pylance: Type of from_dict() is partially unknown
-        return Dataset.from_dict(data) # type: ignore[reportUnknownMemberType]
+        return Dataset.from_dict(data)  # type: ignore[reportUnknownMemberType]
 
     def _load_from_hub(self, hub_dataset: str) -> Dataset:
         """
