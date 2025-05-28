@@ -74,6 +74,9 @@ class SQNAAdapter(DatasetAdapter):
                 else:
                     raise SyntaxError("Invalid syntax (line does not start with > or <)")
 
+        if len(messages["in"]) != len(messages["out"]):
+            raise SyntaxError("Invalid syntax (missing answer)")
+
         # Pylance: Type of from_dict() is partially unknown
         return Dataset.from_dict(messages) # type: ignore[reportUnknownMemberType]
 
