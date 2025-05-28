@@ -115,7 +115,7 @@ class SQNAAdapter(DatasetAdapter):
             for record in self._iter_records(wide_dataset)
         ]
 
-    def to_dat(self, wide_dataset: Dataset, dat_filename: str) -> None:
+    def from_dataset_to_dat(self, wide_dataset: Dataset, dat_filename: str) -> None:
         """
         Writes a wide-format SQNA dataset to a DAT file.
 

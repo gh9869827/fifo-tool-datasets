@@ -122,7 +122,7 @@ class DatasetAdapter(ABC):
         ).shuffle(seed=seed)
 
     @abstractmethod
-    def to_dat(self, wide_dataset: Dataset, dat_filename: str) -> None:
+    def from_dataset_to_dat(self, wide_dataset: Dataset, dat_filename: str) -> None:
         """
         Writes a wide-format dataset to a DAT file.
 

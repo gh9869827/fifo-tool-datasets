@@ -243,7 +243,7 @@ class ConversationAdapter(DatasetAdapter):
         return conversations
 
 
-    def to_dat(self, wide_dataset: Dataset, dat_filename: str) -> None:
+    def from_dataset_to_dat(self, wide_dataset: Dataset, dat_filename: str) -> None:
         """
         Writes a wide-format conversation dataset to a DAT file.
 
