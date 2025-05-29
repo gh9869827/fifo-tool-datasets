@@ -1,5 +1,5 @@
 import pytest
-from fifo_tool_datasets.sdk.hf_dataset_adapters.single_question_n_answer import (
+from fifo_tool_datasets.sdk.hf_dataset_adapters.sqna import (
     SQNAAdapter
 )
 # Pylance: suppress missing type stub warning for datasets
