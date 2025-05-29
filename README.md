@@ -1,4 +1,4 @@
-# `fifo_dev_llm.dataset_adapters`
+# `fifo-tool-datasets`
 
 This module provides standardized adapters for loading `.dat` files into structured formats suitable for LLM training or evaluation.
 
@@ -176,4 +176,4 @@ All adapters are fully covered with unit tests under `tests/`:
 
 ## ✅ License
 
-MIT — see [LICENSE](../../LICENSE) for details.
+MIT — see [LICENSE](LICENSE) for details.

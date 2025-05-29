@@ -1,9 +1,14 @@
 import pytest
-from fifo_dev_llm.dataset_adapters.common import DatasetAdapter
-from fifo_dev_llm.dataset_adapters.conversation import ConversationAdapter, ConversationRecord
+from fifo_tool_datasets.sdk.hf_dataset_adapters.common import (
+    DatasetAdapter
+)
+from fifo_tool_datasets.sdk.hf_dataset_adapters.conversation import (
+    ConversationAdapter,
+    ConversationRecord
+)
 # Pylance: suppress missing type stub warning for datasets
 from datasets import (  # type: ignore
-    Dataset,
+    Dataset
 )
 import pathlib
 
