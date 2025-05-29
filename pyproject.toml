@@ -1,0 +1,17 @@
+[project]
+name = "fifo-tool-datasets"
+version = "0.1.0"
+description = "Convert .dat files to/from Hugging Face datasets and JSON for LLM fine-tuning"
+authors = [
+  { name = "Florent Gastoud" }
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "datasets>=3.5.0"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
