@@ -1,4 +1,4 @@
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)  
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
 
 # `fifo-tool-datasets`
@@ -26,13 +26,13 @@ See format examples below in each adapter section.
 - [🔁 Conversion Matrix](#-conversion-matrix)
 - [📦 Installation](#-installation)
 - [🚀 CLI Usage](#-cli-usage)
-  - [🛠️ Command Reference](#-command-reference)
-  - [💡 Command examples](#️-command-examples)  
+  - [🛠️ Command Reference](#%EF%B8%8F-command-reference)
+  - [💡 Command examples](#%EF%B8%8F-command-examples)
 - [📦 SDK Usage](#-sdk-usage)
 - [🔌 Available Adapters](#-available-adapters)
   - [🧠 `ConversationAdapter`](#-conversationadapter)
   - [💬 `SQNAAdapter`](#-sqnaadapter)
-  - [⚙️ `DSLAdapter`](#-dsladapter)
+  - [⚙️ `DSLAdapter`](#%EF%B8%8F-dsladapter)
 - [✅ Validation Rules](#-validation-rules)
 - [🧪 Tests](#-tests)
 - [✅ License](#-license)
