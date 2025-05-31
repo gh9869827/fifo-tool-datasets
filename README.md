@@ -1,4 +1,4 @@
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)  
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
 
 # `fifo-tool-datasets`
@@ -10,10 +10,11 @@ It supports both:
 - ✅ **A Python SDK** — for structured loading and conversion  
 - ✅ **A CLI** — to upload/download `.dat` files to/from the Hugging Face Hub
 
-`.dat` files are plain-text datasets designed for LLM training. They come in two styles:
+`.dat` files are plain-text datasets designed for LLM training. They come in three styles:
 
 - 💬 `sqna` (single-turn): prompt-response pairs  
 - 🧠 `conversation` (multi-turn): role-tagged chat sessions  
+- ⚙️ `dsl` (structured): system → input → DSL output triplets
 
 See format examples below in each adapter section.
 
@@ -31,6 +32,7 @@ See format examples below in each adapter section.
 - [🔌 Available Adapters](#-available-adapters)
   - [🧠 `ConversationAdapter`](#-conversationadapter)
   - [💬 `SQNAAdapter`](#-sqnaadapter)
+  - [⚙️ `DSLAdapter`](#-dsladapter)
 - [✅ Validation Rules](#-validation-rules)
 - [🧪 Tests](#-tests)
 - [✅ License](#-license)
@@ -42,12 +44,12 @@ See format examples below in each adapter section.
 | Format           | Description                                                                 |
 |------------------|-----------------------------------------------------------------------------|
 | `.dat`           | Editable plain-text format with tags (e.g. `>`, `<`, `---`)                |
-| `Dataset`        | refers to the Hugging Face `datasets.Dataset` object — a table of records used for LLM fine tuning |
-| `wide_dataset`   | Flattened `Dataset` with one row per message. Format is **adapter-specific** (e.g., fields like `role`, `content`, `in`, `out`, etc.) |
-| `json`           | A list of `messages` dictionaries — the internal format used to build the `Dataset` |
-| `hub`            | A `DatasetDict` of `Dataset` splits (`train`, `validation`, `test`) in wide format, stored on the Hugging Face Hub |
+| `Dataset`        | Hugging Face `datasets.Dataset` object — used for fine-tuning              |
+| `wide_dataset`   | Flattened `Dataset` with one row per message — format depends on adapter   |
+| `json`           | A list of `messages` dictionaries                                           |
+| `hub`            | A `DatasetDict` with `train`, `validation`, and `test` splits              |
 
-Datasets uploaded to the Hub are split into `train`, `validation`, and `test` partitions using the wide format.
+All datasets uploaded to the Hub — if not already split — are automatically divided into `train`, `validation`, and `test` partitions using the wide format.
 
 ---
 
@@ -65,7 +67,6 @@ Datasets uploaded to the Hub are split into `train`, `validation`, and `test` pa
 - ✅ **direct**: single-step conversion  
 - ✅ **indirect**: composed of helper conversions  
 - **(returns dict)**: result is a `DatasetDict`  
-- — not supported
 
 ---
 
@@ -74,7 +75,7 @@ Datasets uploaded to the Hub are split into `train`, `validation`, and `test` pa
 Install both the CLI and SDK in one step:
 
 ```bash
-pip install -e .
+python3 -m pip install -e .
 ```
 
 This enables the `fifo-tool-datasets` command.
@@ -91,21 +92,19 @@ fifo-tool-datasets <command> [options]
 
 #### `copy`
 
-Upload/download between `.dat` files and the Hugging Face Hub.
+Upload or download datasets between `.dat` files (or directories) and the Hugging Face Hub.
 
 ```bash
 fifo-tool-datasets copy <src> <dst> --adapter <adapter> [--commit-message <msg>] [--seed <int>]
 ```
 
-- `.dat` → hub: requires `--commit-message`  
-- hub → `.dat`: downloads to file
+- `.dat` or directory → hub: requires `--commit-message`
+- hub → `.dat` or directory: downloads as a file (datasets are merged) or as a directory (each split is preserved)
 
 #### `split`
 
-Split a `.dat` file into `train/validation/test`.
-
 ```bash
-fifo-tool-datasets split <src> --adapter <adapter> [--to <dir>] [--split-ratio <train> <validation> <test>] [-y]
+fifo-tool-datasets split <src> --adapter <adapter> [--to <dir>] [--split-ratio <train> <val> <test>] [-y]
 ```
 
 Default split ratio is `[0.7, 0.15, 0.15]` if `--split-ratio` is omitted.
@@ -122,55 +121,51 @@ fifo-tool-datasets merge <dir> --adapter <adapter> [--to <file>] [-y]
 
 ### 💡 Command examples
 
-#### ⬆️ Upload a `.dat` file to the Hugging Face Hub
-
 ```bash
-fifo-tool-datasets copy my_dataset.dat your-username/my-dataset --adapter sqna --commit-message "initial upload"
-```
+# Upload
+fifo-tool-datasets copy dsl.dat username/my-dataset --adapter dsl --commit-message "init"
 
-#### ⬇️ Download from the Hugging Face Hub and regenerate `.dat`
+# Download
+fifo-tool-datasets copy username/my-dataset dsl.dat --adapter dsl
 
-```bash
-fifo-tool-datasets copy your-username/my-dataset my_dataset.dat --adapter conversation
-```
+# Split
+fifo-tool-datasets split dsl.dat --adapter dsl --to split_dsl
 
-#### ✂️ Split a `.dat` file into train/val/test
-
-```bash
-fifo-tool-datasets split my_dataset.dat --adapter conversation --to my_dataset_split
-```
-
-#### 🔁 Merge split files back into one `.dat` file
-
-```bash
-fifo-tool-datasets merge my_dataset_split --adapter conversation --to merged.dat
+# Merge
+fifo-tool-datasets merge split_dsl --adapter dsl --to full.dsl.dat
 ```
 
 ---
 
 ## 📦 SDK Usage
 
-### 📥 Importing
-
 ```python
-from fifo_tool_datasets.sdk.hf_dataset_adapters.conversation import ConversationAdapter
-from fifo_tool_datasets.sdk.hf_dataset_adapters.sqna import SQNAAdapter
-```
+from fifo_tool_datasets.sdk.hf_dataset_adapters.dsl import DSLAdapter
 
-### 🧪 Example
+adapter = DSLAdapter()
 
-```python
-adapter = SQNAAdapter()
+# Upload to the Hugging Face Hub
+adapter.from_dat_to_hub(
+    "dsl.dat",
+    "username/my-dataset",
+    commit_message="initial upload"
+)
 
-# .dat to Dataset
-dataset = adapter.from_dat_to_dataset("data.dat")
+# Download from the Hub as a DatasetDict (train/validation/test)
+splits = adapter.from_hub_to_dataset_dict("username/my-dataset")
 
-# Upload
-adapter.from_dat_to_hub("data.dat", "username/dataset", "upload msg", split_ratios=[0.6, 0.2, 0.2])
+# Access splits for fine-tuning
+train_dataset = splits["train"]
+test_dataset = splits["test"]
 
-# Download and save back
-splits = adapter.from_hub_to_dataset_dict("username/dataset")
-adapter.from_dataset_to_dat(splits["train"], "out.dat")
+# You can now use train_dataset / test_dataset to fine-tune your LLM
+# e.g., with Hugging Face Transformers Trainer, SFTTrainer, etc.
+
+# You can also directly load from a local .dat file
+dataset = adapter.from_dat_to_dataset("dsl.dat")
+
+# Convert to structured JSON format
+json_records = adapter.from_wide_dataset_to_json(dataset)
 ```
 
 ---
@@ -179,38 +174,38 @@ adapter.from_dataset_to_dat(splits["train"], "out.dat")
 
 ### 🧠 `ConversationAdapter`
 
-#### 🧪 `.dat` format
+#### `.dat`
 
-```text
+```
 ---
 $
 You are a helpful assistant.
 >
-Hello!
+Hi
 <
-Hi there.
+Hello!
 ---
 ```
 
-#### 🧪 Wide Format
+#### Wide Format
 
 ```python
 [
-  {"id_conversation": 0, "id_message": 0, "role": "system",    "content": "You are a helpful assistant."},
-  {"id_conversation": 0, "id_message": 1, "role": "user",      "content": "Hello!"},
-  {"id_conversation": 0, "id_message": 2, "role": "assistant", "content": "Hi there."}
+  {"id_conversation": 0, "id_message": 0, "role": "system", "content": "You are a helpful assistant."},
+  {"id_conversation": 0, "id_message": 1, "role": "user",   "content": "Hi"},
+  {"id_conversation": 0, "id_message": 2, "role": "assistant", "content": "Hello!"}
 ]
 ```
 
-#### 🧪 JSON Format
+#### JSON Format
 
 ```python
 [
   {
     "messages": [
       {"role": "system",    "content": "You are a helpful assistant."},
-      {"role": "user",      "content": "Hello!"},
-      {"role": "assistant", "content": "Hi there."}
+      {"role": "user",      "content": "Hi"},
+      {"role": "assistant", "content": "Hello!"}
     ]
   }
 ]
@@ -220,14 +215,14 @@ Hi there.
 
 ### 💬 `SQNAAdapter`
 
-#### 🧪 `.dat` format
+#### `.dat`
 
-```text
+```
 >What is 2+2?
 <4
 ```
 
-#### 🧪 Wide Format
+#### Wide Format
 
 ```python
 [
@@ -235,7 +230,7 @@ Hi there.
 ]
 ```
 
-#### 🧪 JSON Format
+#### JSON Format
 
 ```python
 [
@@ -250,31 +245,53 @@ Hi there.
 
 ---
 
+### ⚙️ `DSLAdapter`
+
+#### `.dat`
+
+```
+---
+$You are a precise DSL parser.
+>today at 5:30PM
+<SET_TIME(TODAY, 17, 30)
+---
+```
+
+#### Wide Format
+
+```python
+[
+  {"system": "You are a precise DSL parser.", "in": "today at 5:30PM", "out": "SET_TIME(TODAY, 17, 30)"}
+]
+```
+
+#### JSON Format
+
+```python
+[
+  {
+    "messages": [
+      {"role": "system", "content": "You are a precise DSL parser."},
+      {"role": "user", "content": "today at 5:30PM"},
+      {"role": "assistant", "content": "SET_TIME(TODAY, 17, 30)"}
+    ]
+  }
+]
+```
+
+---
+
 ## ✅ Validation Rules
 
-### `ConversationAdapter`
+Each adapter enforces its own parsing rules:
 
-- No trailing spaces after tags  
-- No repeated role tags (e.g. `> >`)  
-- All conversations must start with `---`  
-- Conversations must be properly closed  
-- Each tag must be followed by a message  
-
-### `SQNAAdapter`
-
-- Every question (`>`) must be followed by an answer (`<`)  
-- Fails with `SyntaxError` if any question/answer is missing or misaligned  
+- `ConversationAdapter`: tag order, message required after each tag, conversation structure
+- `SQNAAdapter`: strictly `>` then `<`, per pair
+- `DSLAdapter`: must follow `---`, `$`, `>`, `<`, `---` per block, all in single lines
 
 ---
 
 ## 🧪 Tests
-
-Test suite includes:
-
-- `.dat` → wide → structured → back round-trip  
-- Detection of invalid `.dat` structure  
-- Seeded shuffling consistency  
-- Merge/split consistency  
 
 ```bash
 pytest tests/
@@ -284,4 +301,4 @@ pytest tests/
 
 ## ✅ License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE)
