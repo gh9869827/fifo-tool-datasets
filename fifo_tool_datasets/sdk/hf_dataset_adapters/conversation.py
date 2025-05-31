@@ -3,18 +3,18 @@ from typing import Dict, Iterator, Literal, TypedDict, cast
 # Pylance: suppress missing type stub warning for datasets
 from datasets import (  # type: ignore
     Dataset,
+    DatasetDict,
     # Pylance: Type of load_dataset is partially unknown
     load_dataset  # type: ignore[reportUnknownVariableType]
 )
 from .common import DatasetAdapter, JsonConversation
 
-Role = Literal["system", "directives", "user", "assistant"]
-
-class ConversationRecord(TypedDict):
-    id_conversation: int
-    id_message: int
-    role: Role
-    content: str
+Role = Literal[
+    "system",
+    "directives",
+    "user",
+    "assistant"
+]
 
 TAG_TO_ROLE = {
     ">": "user",
@@ -22,6 +22,52 @@ TAG_TO_ROLE = {
     "$": "system",
     "!": "directives"
 }
+
+class WideConversationRecord(TypedDict):
+    """
+    A single message in wide-format, used for flattened datasets.
+
+    Attributes:
+        id_conversation (int):
+            Identifier for the conversation this message belongs to.
+        
+        id_message (int):
+            Message index within the conversation (0-based).
+        
+        role (Role):
+            Role of the speaker (e.g., 'user', 'assistant', 'system', or 'directives').
+        
+        content (str):
+            Text content of the message.
+    """
+    id_conversation: int
+    id_message: int
+    role: Role
+    content: str
+
+class WideDataDict(TypedDict):
+    """
+    Column-wise dictionary representing a wide-format dataset.
+
+    Each list corresponds to a full column in the dataset — same length across all keys.
+
+    Attributes:
+        id_conversation (list[int]):
+            List of conversation IDs for all messages.
+
+        id_message (list[int]):
+            List of message indices within each conversation.
+
+        role (list[str]):
+            List of roles (as strings) for each message.
+
+        content (list[str]):
+            List of text content for each message.
+    """
+    id_conversation: list[int]
+    id_message: list[int]
+    role: list[str]
+    content: list[str]
 
 class ConversationAdapter(DatasetAdapter):
     """
@@ -59,25 +105,25 @@ class ConversationAdapter(DatasetAdapter):
         [
             {
                 "id_conversation": 0,
-                "id_message": 1,
+                "id_message": 0,
                 "role": "system",
                 "content": "You are a helpful assistant."
             },
             {
                 "id_conversation": 0,
-                "id_message": 2,
+                "id_message": 1,
                 "role": "directives",
                 "content": "Always be concise."
             },
             {
                 "id_conversation": 0,
-                "id_message": 3,
+                "id_message": 2,
                 "role": "user",
                 "content": "Convert 1200 feet into meters."
             },
             {
                 "id_conversation": 0,
-                "id_message": 4,
+                "id_message": 3,
                 "role": "assistant",
                 "content": "1200 feet is equal to 365.76 meters."
             }
@@ -86,13 +132,13 @@ class ConversationAdapter(DatasetAdapter):
     Corresponding JSON format:
         [{"messages": [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "Always be concise."},
+            {"role": "directives", "content": "Always be concise."},
             {"role": "user", "content": "Convert 1200 feet into meters."},
             {"role": "assistant", "content": "1200 feet is equal to 365.76 meters."}
         ]}]
     """
 
-    def _from_dat_to_wide_dataset(self, dat_filename: str) -> Dataset:
+    def from_dat_to_wide_dataset(self, dat_filename: str) -> Dataset:
         """
         Parses a conversation DAT file into a wide-format Hugging Face Dataset.
 
@@ -107,20 +153,16 @@ class ConversationAdapter(DatasetAdapter):
         Raises:
             ValueError: If the file contains malformed tags or syntax violations.
         """
-        class RawDataDict(TypedDict):
-            id_conversation: list[int]
-            id_message: list[int]
-            role: list[str]
-            content: list[str]
-
-        data: RawDataDict = {
+        flat_data: WideDataDict = {
             "id_conversation": [],
             "id_message": [],
             "role": [],
             "content": []
         }
 
-        id_conversation, id_message = 0, 0
+        # we start from -1 so that the first id that is used is actually 0 since we increment before
+        # use
+        id_conversation, id_message = -1, -1
         role, content = None, None
 
         line_number = 0
@@ -143,10 +185,10 @@ class ConversationAdapter(DatasetAdapter):
 
                 if content is not None and line in ["---", ">", "<", "$", "!"]:
                     assert role is not None
-                    data["id_conversation"].append(id_conversation)
-                    data["id_message"].append(id_message)
-                    data["role"].append(role)
-                    data["content"].append(content)
+                    flat_data["id_conversation"].append(id_conversation)
+                    flat_data["id_message"].append(id_message)
+                    flat_data["role"].append(role)
+                    flat_data["content"].append(content)
 
                 if line in [">", "<"] and prev_tag == line:
                     raise ValueError(
@@ -155,11 +197,11 @@ class ConversationAdapter(DatasetAdapter):
                     )
 
                 if line == "---":
-                    if id_conversation > 0 and (content is None and prev_tag is None):
+                    if id_conversation >= 0 and (content is None and prev_tag is None):
                         raise ValueError(f"Conversation {id_conversation} is empty, "
                                          f"line {line_number}")
                     id_conversation += 1
-                    id_message = 0
+                    id_message = -1
                     content = None
                     prev_tag = None
                 elif line in TAG_TO_ROLE:
@@ -178,36 +220,99 @@ class ConversationAdapter(DatasetAdapter):
                              f"not closed properly, last line {line_number}")
 
         # Pylance: Type of from_dict() is partially unknown
-        return Dataset.from_dict(data)  # type: ignore[reportUnknownMemberType]
+        return Dataset.from_dict(flat_data)  # type: ignore[reportUnknownMemberType]
 
-    def _load_from_hub(self, hub_dataset: str) -> Dataset:
+    def from_dataset_to_wide_dataset(self, dataset: Dataset) -> Dataset:
         """
-        Loads a conversation dataset from the Hugging Face hub.
+        Converts a structured dataset (list of conversations) to a flat wide-format Hugging Face
+        Dataset.
 
         Args:
-            hub_dataset (str):
-                The Hugging Face dataset identifier.
+            structured_dataset (Dataset):
+                The dataset containing a list of conversations.
 
         Returns:
             Dataset:
-                A dataset containing `id_conversation`, `id_message`, `role`, and `content` fields.
+                A flat dataset with fields: id_conversation, id_message, role, and content.
         """
-        # Explicitly loading a split returns a Dataset, not a DatasetDict - safe to cast
-        wide_dataset = cast(Dataset, load_dataset(hub_dataset, split="train"))
+        flat_data: WideDataDict = {
+            "id_conversation": [],
+            "id_message": [],
+            "role": [],
+            "content": []
+        }
 
-        # Check minimum values of 'id_conversation' and 'id_message' columns
-        min_id_conversation = min(cast(list[int], wide_dataset["id_conversation"]))
-        min_id_message = min(cast(list[int], wide_dataset["id_message"]))
+        for convo_idx, example in enumerate(self._iter_structured_records(dataset)):
+            messages = example["messages"]
+            for msg_idx, msg in enumerate(messages):
+                flat_data["id_conversation"].append(convo_idx)
+                flat_data["id_message"].append(msg_idx)
+                flat_data["role"].append(msg["role"])
+                flat_data["content"].append(msg["content"])
 
-        # Ensure the minimum values are >= 0
-        if min_id_conversation < 0 or min_id_message < 0:
-            raise ValueError("All 'id_conversation' and 'id_message' values must be >= 0")
+        # Pylance: Type of from_dict() is partially unknown
+        return Dataset.from_dict(flat_data)  # type: ignore[reportUnknownMemberType]
 
-        sorted_dataset = wide_dataset.sort(["id_conversation", "id_message"])
+    def from_hub_to_dataset_wide_dict(self, hub_dataset: str) -> DatasetDict:
+        """
+        Loads a conversation-style dataset from the Hugging Face Hub and returns it as a split
+        DatasetDict.
+
+        Each split (`train`, `validation`, `test`) must be present and follow the wide-format schema
+        expected by the adapter: one row per message, with fields like `id_conversation`,
+        `id_message`, `role`, and `content`.
+
+        All splits are validated and sorted by `id_conversation` and `id_message`.
+
+        Args:
+            hub_dataset (str):
+                The Hugging Face dataset identifier (e.g., "username/dataset").
+
+        Returns:
+            DatasetDict:
+                A dictionary containing train, validation, and test splits in wide format, sorted by
+                conversation and message order.
+
+        Raises:
+            ValueError:
+                If the dataset is not split, required splits are missing, or expected fields are
+                absent.
+        """
+        wide_dataset = load_dataset(hub_dataset)
+
+        if not isinstance(wide_dataset, DatasetDict):
+            raise ValueError("Expected a split DatasetDict, but got a flat Dataset.")
+
+        required_splits = {"train", "validation", "test"}
+        actual_splits = set(cast(list[str], wide_dataset.keys()))
+        missing_splits = required_splits - actual_splits
+        if missing_splits:
+            raise ValueError(f"Missing required splits: {', '.join(sorted(missing_splits))}")
+
+        required_columns = {"id_conversation", "id_message", "role", "content"}
+        sorted_dataset = DatasetDict()
+
+        for split_name, split_data in cast(dict[str, Dataset], wide_dataset).items():
+            actual_columns = set(split_data.column_names)
+            missing_columns = required_columns - actual_columns
+            if missing_columns:
+                raise ValueError(f"Split '{split_name}' is missing required "
+                                 f"columns: {', '.join(missing_columns)}")
+
+            min_id_conversation = min(cast(list[int], split_data["id_conversation"]))
+            min_id_message = min(cast(list[int], split_data["id_message"]))
+
+            if min_id_conversation < 0 or min_id_message < 0:
+                raise ValueError(
+                    f"Split '{split_name}' contains negative values "
+                    "in 'id_conversation' or 'id_message'"
+                )
+
+            sorted_dataset[split_name] = split_data.sort(["id_conversation", "id_message"])
 
         return sorted_dataset
 
-    def _from_wide_dataset_to_json(self, wide_dataset: Dataset) -> JsonConversation:
+    def from_wide_dataset_to_json(self, wide_dataset: Dataset) -> JsonConversation:
         """
         Converts a wide-format conversation dataset into JSON-style format.
 
@@ -219,10 +324,12 @@ class ConversationAdapter(DatasetAdapter):
             JsonConversation:
                 A list of dicts with `messages` containing role/content pairs for each conversation.
         """
+        sorted_wide_dataset = wide_dataset.sort(["id_conversation", "id_message"])
+
         id_conversation = -1
         conversations: JsonConversation = []
         messages: list[Dict[str, str]] = []
-        for record in self._iter_records(wide_dataset):
+        for record in self._iter_wide_records(sorted_wide_dataset):
             if record["id_conversation"] != id_conversation:
                 id_conversation = record["id_conversation"]
                 if messages:
@@ -230,10 +337,8 @@ class ConversationAdapter(DatasetAdapter):
                     messages = []
 
             role = record["role"]
-            if role in ["assistant", "user", "system"]:
+            if role in ["assistant", "user", "system", "directives"]:
                 messages.append({"role": role, "content": record["content"]})
-            elif role == "directives":
-                messages.append({"role": "user", "content": record["content"]})
             else:
                 raise ValueError(f"Unknown role: {role}")
 
@@ -242,8 +347,7 @@ class ConversationAdapter(DatasetAdapter):
 
         return conversations
 
-
-    def from_dataset_to_dat(self, wide_dataset: Dataset, dat_filename: str) -> None:
+    def from_wide_dataset_to_dat(self, wide_dataset: Dataset, dat_filename: str) -> None:
         """
         Writes a wide-format conversation dataset to a DAT file.
 
@@ -256,7 +360,7 @@ class ConversationAdapter(DatasetAdapter):
         """
         id_conversation = -1
         with open(dat_filename, 'w', encoding='utf-8') as f:
-            for record in self._iter_records(wide_dataset):
+            for record in self._iter_wide_records(wide_dataset):
                 if record["id_conversation"] != id_conversation:
                     id_conversation = record["id_conversation"]
                     f.write("---\n")
@@ -274,22 +378,22 @@ class ConversationAdapter(DatasetAdapter):
                 f.write(f"{record['content']}\n")
             f.write("---\n")
 
-    def _iter_records(self, dataset: Dataset) -> Iterator[ConversationRecord]:
+    def _iter_wide_records(self, wide_dataset: Dataset) -> Iterator[WideConversationRecord]:
         """
         Returns an iterator over a Hugging Face Dataset with each record typed as a
-        ConversationRecord.
+        WideConversationRecord.
 
         This helper function enables static type checking and clean field access like
         `record["id_conversation"]`, `record["role"]`, etc., which are expected fields in
         wide-format conversation datasets.
 
         Args:
-            dataset (Dataset):
+            wide_dataset (Dataset):
                 A Hugging Face Dataset where each row contains fields
                 `id_conversation`, `id_message`, `role`, and `content`.
 
         Returns:
-            Iterator[ConversationRecord]:
+            Iterator[WideConversationRecord]:
                 An iterator over the dataset where each item is typed as a ConversationRecord.
         """
-        return cast(Iterator[ConversationRecord], iter(dataset))
+        return cast(Iterator[WideConversationRecord], iter(wide_dataset))
