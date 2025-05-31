@@ -2,6 +2,7 @@ import tempfile
 from typing import cast
 import pytest
 from unittest.mock import patch
+from fifo_tool_datasets.sdk.hf_dataset_adapters.common import StructuredConversationRecord
 from fifo_tool_datasets.sdk.hf_dataset_adapters.sqna import (
     SQNAAdapter
 )
@@ -15,7 +16,7 @@ import pathlib
 def test_from_dat_to_wide_dataset():
     adapter = SQNAAdapter()
     path = pathlib.Path(__file__).parent / "fixtures" / "sqna_01.dat"
-    dataset = adapter.from_dat_to_wide_dataset(str(path)) # pylint: disable=protected-access # type: ignore[reportPrivateUsage]
+    dataset = adapter.from_dat_to_wide_dataset(str(path))
 
     assert isinstance(dataset, Dataset)
     assert len(dataset) == 2
@@ -36,7 +37,7 @@ def test_from_dat_to_wide_dataset_broken(filename: str, expected_error: str) -> 
     path = pathlib.Path(__file__).parent / "fixtures" / filename
 
     with pytest.raises(SyntaxError, match=expected_error):
-        adapter.from_dat_to_wide_dataset(str(path))  # pylint: disable=protected-access  # type: ignore[reportPrivateUsage]
+        adapter.from_dat_to_wide_dataset(str(path))
 
 def normalize_dat(content: str) -> str:
     # Normalize line endings and strip trailing whitespace
@@ -80,7 +81,10 @@ def test_roundtrip_wide_to_dat(filename: str) -> None:
         ]
     )
 ])
-def test_from_wide_dataset_to_json(filename: str, expected: list[dict[str, str]]) -> None:
+def test_from_wide_dataset_to_json(
+    filename: str,
+    expected: list[StructuredConversationRecord]
+) -> None:
     adapter = SQNAAdapter()
     path = pathlib.Path(__file__).parent / "fixtures" / filename
 

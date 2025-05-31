@@ -134,9 +134,12 @@ EXPECTED_CONVERSATION_04_STRUCTURED = [
 def test_from_dat_to_wide_dataset(filename: str, expected: list[WideConversationRecord]) -> None:
     adapter = ConversationAdapter()
     path = pathlib.Path(__file__).parent / "fixtures" / filename
-    actual = adapter.from_dat_to_wide_dataset(str(path)).to_list()  # type: ignore[reportPrivateUsage]
+    dataset = adapter.from_dat_to_wide_dataset(str(path))
 
-    assert actual == expected
+    assert isinstance(dataset, Dataset)
+
+    # Pylance: Type of to_list() is partially unknown
+    assert dataset.to_list() == expected  # type: ignore[reportUnknownMemberType]
 
 @pytest.mark.parametrize("filename,expected_error", [
     ("conversation_broken_01.dat", r"Conversation 0 is empty"),
@@ -153,7 +156,7 @@ def test_from_dat_to_wide_dataset_broken(filename: str, expected_error: str) -> 
     path = pathlib.Path(__file__).parent / "fixtures" / filename
 
     with pytest.raises(ValueError, match=expected_error):
-        adapter.from_dat_to_wide_dataset(str(path))  # pylint: disable=protected-access  # type: ignore[reportPrivateUsage]
+        adapter.from_dat_to_wide_dataset(str(path))
 
 def normalize_dat(content: str) -> str:
     # Normalize line endings and strip trailing whitespace
@@ -192,7 +195,10 @@ def test_roundtrip_wide_to_dat(filename: str) -> None:
     ("conversation_03.dat", EXPECTED_CONVERSATION_03_STRUCTURED),
     ("conversation_04.dat", EXPECTED_CONVERSATION_04_STRUCTURED),
 ])
-def test_from_wide_dataset_to_json(filename: str, expected: list[dict[str, Any]]) -> None:
+def test_from_wide_dataset_to_json(
+    filename: str,
+    expected: list[StructuredConversationRecord]
+) -> None:
     adapter = ConversationAdapter()
     path = pathlib.Path(__file__).parent / "fixtures" / filename
 
@@ -209,13 +215,13 @@ def test_from_wide_dataset_to_json(filename: str, expected: list[dict[str, Any]]
     (EXPECTED_CONVERSATION_04_STRUCTURED, EXPECTED_CONVERSATION_04_WIDE),
 ])
 def test_from_dataset_to_wide_dataset_conversation(
-    structured_data: list[dict[str, Any]],
+    structured_data: list[StructuredConversationRecord],
     expected_wide: list[WideConversationRecord]):
 
     adapter = ConversationAdapter()
     # Pylance: Type of from_list() is partially unknown
     structured_dataset = Dataset.from_list(  # type: ignore[reportUnknownMemberType]
-        structured_data
+        cast(list[dict[str, Any]], structured_data)
     )
     wide_dataset = adapter.from_dataset_to_wide_dataset(structured_dataset)
 
