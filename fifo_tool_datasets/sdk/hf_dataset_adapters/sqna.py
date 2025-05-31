@@ -152,6 +152,13 @@ class SQNAAdapter(DatasetAdapter):
         if not isinstance(wide_dataset, DatasetDict):
             raise ValueError("Expected a split DatasetDict, but got a flat Dataset.")
 
+        required_columns = {"in", "out"}
+        for split in cast(list[str], wide_dataset.keys()):
+            columns = set(wide_dataset[split].column_names)
+            if not required_columns.issubset(columns):
+                raise ValueError(f"Split '{split}' is missing required "
+                                 f"columns: {required_columns - columns}")
+
         return wide_dataset
 
     def from_wide_dataset_to_json(self, wide_dataset: Dataset) -> JsonConversation:
