@@ -27,7 +27,7 @@ See format examples below in each adapter section.
 - [📦 Installation](#-installation)
 - [🚀 CLI Usage](#-cli-usage)
   - [🛠️ Command Reference](#%EF%B8%8F-command-reference)
-  - [💡 Command examples](#%EF%B8%8F-command-examples)
+  - [💡 Command examples](#-command-examples)
 - [📦 SDK Usage](#-sdk-usage)
 - [🔌 Available Adapters](#-available-adapters)
   - [🧠 `ConversationAdapter`](#-conversationadapter)
