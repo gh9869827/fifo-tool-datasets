@@ -36,6 +36,7 @@ See format examples below in each adapter section.
 - [✅ Validation Rules](#-validation-rules)
 - [🧪 Tests](#-tests)
 - [✅ License](#-license)
+- [📄 Disclaimer](#-disclaimer)
 
 ---
 
@@ -302,3 +303,10 @@ pytest tests/
 ## ✅ License
 
 MIT — see [LICENSE](LICENSE)
+
+---
+
+## 📄 Disclaimer
+
+This project is not affiliated with or endorsed by Hugging Face or the Python Software Foundation.  
+It builds on their open-source technologies under their respective licenses.
