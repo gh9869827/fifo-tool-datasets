@@ -1,5 +1,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
+![Test Status](https://github.com/gh9869827/fifo-tool-datasets/actions/workflows/test.yml/badge.svg)
 
 # `fifo-tool-datasets`
 
