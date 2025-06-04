@@ -17,6 +17,8 @@ It supports both:
 - 🧠 `conversation` (multi-turn): role-tagged chat sessions  
 - ⚙️ `dsl` (structured): system → input → DSL output triplets
 
+They are human-editable, diffable, and ideal for version control — especially during dataset iteration.
+
 See format examples below in each adapter section.
 
 ---
