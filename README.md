@@ -4,20 +4,30 @@
 
 # `fifo-tool-datasets`
 
-`fifo-tool-datasets` provides standardized adapters to convert `.dat` files into formats compatible with LLM training — including Hugging Face `datasets.Dataset` and JSON message structures.
+`fifo-tool-datasets` provides standardized adapters to convert plain `.dat` files into formats compatible with LLM training — including Hugging Face `datasets.Dataset` and JSON message arrays.
 
 It supports both:
 
 - ✅ **A Python SDK** — for structured loading and conversion  
 - ✅ **A CLI** — to upload/download `.dat` files to/from the Hugging Face Hub
 
-`.dat` files are plain-text datasets designed for LLM training. They come in three styles:
+`.dat` files are plain-text datasets designed for LLM fine-tuning. They come in three styles:
 
 - 💬 `sqna` (single-turn): prompt-response pairs  
 - 🧠 `conversation` (multi-turn): role-tagged chat sessions  
 - ⚙️ `dsl` (structured): system → input → DSL output triplets
 
-They are human-editable, diffable, and ideal for version control — especially during dataset iteration.
+These files are human-editable, diffable, and ideal for version control — especially during dataset development and iteration.
+
+This tool enables a complete round-trip workflow:
+
+1. Create and edit a `.dat` file locally  
+2. Convert and upload it as a training-ready Hugging Face `datasets.Dataset`  
+3. Later, download and deserialize it back into `.dat` for further edits
+
+This gives you the best of both worlds:
+- ✍️ Easy editing and version control via `.dat`  
+- 🚀 Compatibility with HF pipelines using `load_dataset()`
 
 See format examples below in each adapter section.
 
