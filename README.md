@@ -59,18 +59,18 @@ All datasets uploaded to the Hub — if not already split — are automatically 
 
 ## 🔁 Conversion Matrix
 
-| From \ To       | dataset                                    | wide_dataset                                  | dat                                              | hub                                                     | json                                          |
-|-----------------|---------------------------------------------|-----------------------------------------------|--------------------------------------------------|----------------------------------------------------------|-----------------------------------------------|
-| **dataset**     | —                                           | ✅ `from_dataset_to_wide_dataset`<br>*(direct)* | ✅ `from_dataset_to_dat`<br>*(indirect)*         | —                                                        | —                                             |
-| **wide_dataset**| —                                           | —                                             | ✅ `from_wide_dataset_to_dat`<br>*(direct)*      | —                                                        | ✅ `from_wide_dataset_to_json`<br>*(direct)*  |
-| **dat**         | ✅ `from_dat_to_dataset`<br>*(indirect)*    | ✅ `from_dat_to_wide_dataset`<br>*(direct)*    | —                                                | ✅ `from_dat_to_hub`<br>*(indirect)*                     | —                                             |
-| **hub**         | ✅ `from_hub_to_dataset_dict`<br>*(indirect, returns dict)* | ✅ `from_hub_to_dataset_wide_dict`<br>*(direct, returns dict)* | —                                                | —                                                        | —                                             |
-| **json**        | —                                           | —                                             | —                                                | —                                                        | —                                             |
+| From \ To       | dataset                                               | wide_dataset                                          | dat                                                  | hub                                                              | json                                               |
+|-----------------|--------------------------------------------------------|--------------------------------------------------------|-------------------------------------------------------|-------------------------------------------------------------------|----------------------------------------------------|
+| **dataset**     | —                                                      | <span title="from_dataset_to_wide_dataset (direct)">✅</span> | <span title="from_dataset_to_dat (indirect)">🧩</span>     | —                                                                 | —                                                  |
+| **wide_dataset**| —                                                      | —                                                      | <span title="from_wide_dataset_to_dat (direct)">✅</span>   | —                                                                 | <span title="from_wide_dataset_to_json (direct)">✅</span>  |
+| **dat**         | <span title="from_dat_to_dataset (indirect)">🧩</span> | <span title="from_dat_to_wide_dataset (direct)">✅</span> | —                                                   | <span title="from_dat_to_hub (indirect)">🧩</span>                 | —                                                  |
+| **hub**         | <span title="from_hub_to_dataset_dict (indirect)">🧩📦</span> | <span title="from_hub_to_dataset_wide_dict (direct)">✅📦</span> | —                                                   | —                                                                 | —                                                  |
+| **json**        | —                                                      | —                                                      | —                                                   | —                                                                 | —                                                  |
 
 **Legend**:
-- ✅ **direct**: single-step conversion  
-- ✅ **indirect**: composed of helper conversions  
-- **(returns dict)**: result is a `DatasetDict`  
+- ✅ **direct**: single-step conversion. Hover to view the function name.
+- 🧩 **indirect**: composed of helper conversions. Hover to view the function name.
+- 📦 **returns dict**: result is a `DatasetDict`.
 
 ---
 
