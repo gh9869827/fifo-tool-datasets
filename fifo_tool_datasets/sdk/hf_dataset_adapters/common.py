@@ -188,7 +188,9 @@ class DatasetAdapter(ABC):
         if not abs(sum(split_ratios) - 1.0) < 1e-6:
             raise ValueError("Split ratios must sum to 1.0")
 
-        dataset = self.from_dat_to_wide_dataset(dat_filename)
+        # Load dataset in flat format: wide format is avoided since one logical record
+        # may span multiple rows, breaking shuffling.
+        dataset = self.from_dat_to_dataset(dat_filename)
         dataset = dataset.shuffle(seed=seed)
 
         val_ratio, test_ratio = split_ratios[1], split_ratios[2]
@@ -208,6 +210,12 @@ class DatasetAdapter(ABC):
             "test": dataset.select(  # type: ignore[reportUnknownMemberType]
                 range(train_size + val_size, total)
             )
+        }
+
+        # convert back to wide format
+        splits = {
+            split_name: self.from_dataset_to_wide_dataset(split_dataset)
+            for split_name, split_dataset in splits.items()
         }
 
         # Push each split to hub
