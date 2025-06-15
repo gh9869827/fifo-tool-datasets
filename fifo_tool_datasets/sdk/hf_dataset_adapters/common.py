@@ -80,10 +80,10 @@ class DatasetAdapter(ABC):
         Uploads multiple split .dat files from a directory to the Hugging Face Hub.
 
     - from_hub_to_dataset_dict(hub_dataset)
-        Builds a shuffled Huggingface Dataset from a JSON loader function.
+        Builds a Huggingface Dataset from a JSON loader function.
 
     - from_dat_to_dataset(filename)
-        Builds a shuffled Dataset from a DAT file using format-specific parsing.
+        Builds a Dataset from a DAT file using format-specific parsing.
 
     - from_dataset_to_dat(dataset, dat_filename)
         Converts a structured Hugging Face Dataset to a .dat file using wide-format conversion.
@@ -308,7 +308,7 @@ class DatasetAdapter(ABC):
 
     def from_dat_to_dataset(self, filename: str) -> Dataset:
         """
-        Builds a shuffled Dataset from a DAT file using format-specific parsing.
+        Builds a Dataset from a DAT file using format-specific parsing.
 
         Args:
             filename (str):
@@ -319,7 +319,7 @@ class DatasetAdapter(ABC):
 
         Returns:
             Dataset:
-                The parsed and shuffled Dataset object.
+                The parsed Dataset object.
         """
         # Pylance: Type of from_list() is partially unknown
         return Dataset.from_list(  # type: ignore[reportUnknownMemberType]
