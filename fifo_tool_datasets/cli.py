@@ -126,11 +126,11 @@ def main() -> None:
         train_ratio, val_ratio, test_ratio = args.split_ratio
 
         try:
-            splits = adapter.from_dat_to_dataset_dict(
+            splits = cast(dict[str, Dataset], adapter.from_dat_to_dataset_dict(
                 dat_filename=args.src,
                 seed=args.seed,
                 split_ratios=(train_ratio, val_ratio, test_ratio),
-            )
+            ))
         except ValueError as e:
             parser.error(str(e))
 
