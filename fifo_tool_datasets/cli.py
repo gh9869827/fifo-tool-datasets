@@ -9,10 +9,12 @@ from datasets import (  # type: ignore
 from fifo_tool_datasets.sdk.hf_dataset_adapters.common import DatasetAdapter
 from fifo_tool_datasets.sdk.hf_dataset_adapters.conversation import ConversationAdapter
 from fifo_tool_datasets.sdk.hf_dataset_adapters.sqna import SQNAAdapter
+from fifo_tool_datasets.sdk.hf_dataset_adapters.dsl import DSLAdapter
 
 ADAPTERS: dict[str, DatasetAdapter] = {
     "conversation": ConversationAdapter(),
-    "sqna": SQNAAdapter()
+    "sqna": SQNAAdapter(),
+    "dsl": DSLAdapter()
 }
 
 def main() -> None:
