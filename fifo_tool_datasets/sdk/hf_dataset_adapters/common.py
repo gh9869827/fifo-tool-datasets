@@ -180,7 +180,7 @@ class DatasetAdapter(ABC):
                 Tuple of (train, validation, test) ratios. Must sum to 1.0.
 
         Raises:
-            ValueError: If ``commit_message`` is missing or the split ratios are
+            ValueError: If `commit_message` is missing or the split ratios are
             invalid.
         """
         if not commit_message:
@@ -196,7 +196,7 @@ class DatasetAdapter(ABC):
         # convert back to wide format
         splits = {
             split_name: self.from_dataset_to_wide_dataset(split_dataset)
-            for split_name, split_dataset in splits.items()
+            for split_name, split_dataset in cast(dict[str, Dataset], splits).items()
         }
 
         # Push each split to hub
@@ -263,20 +263,26 @@ class DatasetAdapter(ABC):
         seed: int = 42,
         split_ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
     ) -> DatasetDict:
-        """Return a shuffled ``DatasetDict`` split into train/validation/test.
+        """
+        Return a shuffled `DatasetDict` split into train/validation/test.
 
         Args:
-            dat_filename: Path to the input ``.dat`` file.
-            seed: Seed used when shuffling before the split.
-            split_ratios: Tuple of ``(train, validation, test)`` ratios. Must
-                sum to ``1.0`` and be non-negative.
+            dat_filename (str):
+                Path to the input `.dat` file.
+
+            seed (int):
+                Seed used when shuffling before the split.
+
+            split_ratios (tuple[float, float, float]):
+                Tuple of `(train, validation, test)` ratios. Must
+                sum to `1.0` and be non-negative.
 
         Returns:
-            ``datasets.DatasetDict`` with ``"train"``, ``"validation"`` and
-            ``"test"`` splits.
+            datasets.DatasetDict:
+                a `DatasetDict` with `"train"`, `"validation"` and `"test"` splits.
 
         Raises:
-            ValueError: If ratios are negative, do not sum to ``1.0`` or if any
+            ValueError: If ratios are negative, do not sum to `1.0` or if any
             resulting split is empty.
         """
         if any(r < 0 for r in split_ratios) or not abs(sum(split_ratios) - 1.0) < 1e-6:
@@ -314,9 +320,18 @@ class DatasetAdapter(ABC):
 
         return DatasetDict(
             {
-                "train": dataset.select(range(train_size)),
-                "validation": dataset.select(range(train_size, train_size + val_size)),
-                "test": dataset.select(range(train_size + val_size, total)),
+                # Pylance: Type of select() is partially unknown
+                "train": dataset.select(  # type: ignore[reportUnknownMemberType]
+                    range(train_size)
+                ),
+                # Pylance: Type of select() is partially unknown
+                "validation": dataset.select(  # type: ignore[reportUnknownMemberType]
+                    range(train_size, train_size + val_size)
+                ),
+                # Pylance: Type of select() is partially unknown
+                "test": dataset.select(  # type: ignore[reportUnknownMemberType]
+                    range(train_size + val_size, total)
+                ),
             }
         )
 

@@ -251,6 +251,7 @@ def test_from_dat_to_hub_mock_push(mock_push: MagicMock) -> None:
     "split_ratios, expected_message",
     [
         ((0.5, 0.5, 0.5), "Split ratios must sum to 1.0"),
+        ((-0.5, 1.0, 0.5), "Split ratios must be non-negative"),
         ((0.34, 0.33, 0.33), r"Validation dataset is empty \(val_ratio=0.33, total=3\)"),
         ((0.34, 0.34, 0.32), r"Test dataset is empty \(test_ratio=0.32, total=3\)"),
     ],
