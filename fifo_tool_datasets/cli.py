@@ -123,32 +123,18 @@ def main() -> None:
                              " Use -y to overwrite.")
         os.makedirs(out_dir, exist_ok=True)
 
-        dataset = adapter.from_dat_to_dataset(args.src)
-        dataset = dataset.shuffle(seed=args.seed)
-
         train_ratio, val_ratio, test_ratio = args.split_ratio
-        if any(r < 0 for r in (train_ratio, val_ratio, test_ratio)):
-            parser.error("Split ratios must be non-negative")
-        if not abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6:
-            parser.error("Split ratios must sum to 1.0")
 
-        total = len(dataset)
-        val_size = int(total * val_ratio)
-        test_size = int(total * test_ratio)
-        train_size = total - val_size - test_size
-
-        splits = {
-            # Pylance: Type of select() is partially unknown
-            "train": dataset.select(  # type: ignore[reportUnknownMemberType]
-                range(train_size)
-            ),
-            "validation": dataset.select(  # type: ignore[reportUnknownMemberType]
-                range(train_size, train_size + val_size)
-            ),
-            "test": dataset.select(  # type: ignore[reportUnknownMemberType]
-                range(train_size + val_size, total)
+        try:
+            splits = adapter.from_dat_to_dataset_dict(
+                dat_filename=args.src,
+                seed=args.seed,
+                split_ratios=(train_ratio, val_ratio, test_ratio),
             )
-        }
+        except ValueError as e:
+            parser.error(str(e))
+
+        total = sum(len(splits[name]) for name in splits.keys())
 
         for split_name, split_data in splits.items():
             adapter.from_dataset_to_dat(

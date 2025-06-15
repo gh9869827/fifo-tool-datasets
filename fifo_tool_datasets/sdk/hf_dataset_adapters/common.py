@@ -180,57 +180,18 @@ class DatasetAdapter(ABC):
                 Tuple of (train, validation, test) ratios. Must sum to 1.0.
 
         Raises:
-            ValueError: If commit_message is missing or ratios do not sum to 1.0.
+            ValueError: If ``commit_message`` is missing or the split ratios are
+            invalid.
         """
         if not commit_message:
             raise ValueError("Commit message is required")
 
-        if not abs(sum(split_ratios) - 1.0) < 1e-6:
-            raise ValueError("Split ratios must sum to 1.0")
-
-        # Load dataset in flat format: wide format is avoided since one logical record
-        # may span multiple rows, breaking shuffling.
-        dataset = self.from_dat_to_dataset(dat_filename)
-        dataset = dataset.shuffle(seed=seed)
-
-        val_ratio, test_ratio = split_ratios[1], split_ratios[2]
-        total = len(dataset)
-
-        if total < 3:
-            raise ValueError("Dataset too small to split into train/val/test sets")
-
-        val_size = int(total * val_ratio)
-        test_size = int(total * test_ratio)
-        train_size = total - val_size - test_size
-
-        # Validate each split
-        if val_size == 0:
-            raise ValueError(
-                f"Validation dataset is empty (val_ratio={val_ratio}, total={total})"
-            )
-
-        if test_size == 0:
-            raise ValueError(
-                f"Test dataset is empty (test_ratio={test_ratio}, total={total})"
-            )
-
-        if train_size == 0:
-            raise ValueError(
-                f"Train dataset is empty (total={total}, val={val_size}, test={test_size})"
-            )
-
-        splits = {
-            # Pylance: Type of select() is partially unknown
-            "train": dataset.select(  # type: ignore[reportUnknownMemberType]
-                range(train_size)
-            ),
-            "validation": dataset.select(  # type: ignore[reportUnknownMemberType]
-                range(train_size, train_size + val_size)
-            ),
-            "test": dataset.select(  # type: ignore[reportUnknownMemberType]
-                range(train_size + val_size, total)
-            )
-        }
+        # Split the dataset using the helper
+        splits = self.from_dat_to_dataset_dict(
+            dat_filename=dat_filename,
+            seed=seed,
+            split_ratios=split_ratios,
+        )
 
         # convert back to wide format
         splits = {
@@ -294,6 +255,69 @@ class DatasetAdapter(ABC):
         # Pylance: Type of push_to_hub() is partially unknown
         DatasetDict(splits).push_to_hub(  # type: ignore[reportUnknownMemberType]
             hub_dataset, commit_message=commit_message
+        )
+
+    def from_dat_to_dataset_dict(
+        self,
+        dat_filename: str,
+        seed: int = 42,
+        split_ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
+    ) -> DatasetDict:
+        """Return a shuffled ``DatasetDict`` split into train/validation/test.
+
+        Args:
+            dat_filename: Path to the input ``.dat`` file.
+            seed: Seed used when shuffling before the split.
+            split_ratios: Tuple of ``(train, validation, test)`` ratios. Must
+                sum to ``1.0`` and be non-negative.
+
+        Returns:
+            ``datasets.DatasetDict`` with ``"train"``, ``"validation"`` and
+            ``"test"`` splits.
+
+        Raises:
+            ValueError: If ratios are negative, do not sum to ``1.0`` or if any
+            resulting split is empty.
+        """
+        if any(r < 0 for r in split_ratios) or not abs(sum(split_ratios) - 1.0) < 1e-6:
+            if any(r < 0 for r in split_ratios):
+                raise ValueError("Split ratios must be non-negative")
+            raise ValueError("Split ratios must sum to 1.0")
+
+        dataset = self.from_dat_to_dataset(dat_filename)
+        dataset = dataset.shuffle(seed=seed)
+
+        val_ratio, test_ratio = split_ratios[1], split_ratios[2]
+        total = len(dataset)
+
+        if total < 3:
+            raise ValueError("Dataset too small to split into train/val/test sets")
+
+        val_size = int(total * val_ratio)
+        test_size = int(total * test_ratio)
+        train_size = total - val_size - test_size
+
+        if val_size == 0:
+            raise ValueError(
+                f"Validation dataset is empty (val_ratio={val_ratio}, total={total})"
+            )
+
+        if test_size == 0:
+            raise ValueError(
+                f"Test dataset is empty (test_ratio={test_ratio}, total={total})"
+            )
+
+        if train_size == 0:
+            raise ValueError(
+                f"Train dataset is empty (total={total}, val={val_size}, test={test_size})"
+            )
+
+        return DatasetDict(
+            {
+                "train": dataset.select(range(train_size)),
+                "validation": dataset.select(range(train_size, train_size + val_size)),
+                "test": dataset.select(range(train_size + val_size, total)),
+            }
         )
 
     def from_hub_to_dataset_dict(self, hub_dataset: str) -> DatasetDict:
