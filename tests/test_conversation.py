@@ -238,7 +238,7 @@ def test_from_dat_to_hub_mock_push(mock_push: MagicMock) -> None:
         dat_filename=str(fixture_file),
         hub_dataset="dummy-user/dummy-dataset",
         commit_message="test commit message",
-        split_ratios=(0.34, 0.33, 0.33)
+        split_ratios=(0.32, 0.34, 0.34)
     )
 
     # Assert push_to_hub was called once
@@ -246,6 +246,29 @@ def test_from_dat_to_hub_mock_push(mock_push: MagicMock) -> None:
     mock_push.assert_called_once_with(
         'dummy-user/dummy-dataset', commit_message='test commit message'
     )
+
+@pytest.mark.parametrize(
+    "split_ratios, expected_message",
+    [
+        ((0.5, 0.5, 0.5), "Split ratios must sum to 1.0"),
+        ((0.34, 0.33, 0.33), r"Validation dataset is empty \(val_ratio=0.33, total=3\)"),
+        ((0.34, 0.34, 0.32), r"Test dataset is empty \(test_ratio=0.32, total=3\)"),
+    ],
+)
+@patch("datasets.DatasetDict.push_to_hub")
+def test_from_dat_to_hub_invalid_splits(mock_push: MagicMock, split_ratios: tuple[float, float, float], expected_message: str) -> None:
+    adapter = ConversationAdapter()
+    fixture_file = pathlib.Path(__file__).parent / "fixtures" / "conversation_04.dat"
+
+    with pytest.raises(ValueError, match=expected_message):
+        adapter.from_dat_to_hub(
+            dat_filename=str(fixture_file),
+            hub_dataset="dummy-user/dummy-dataset",
+            commit_message="test commit message",
+            split_ratios=split_ratios,
+        )
+
+    mock_push.assert_not_called()
 
 @pytest.mark.parametrize(
     "directory,commit_message,should_fail,expected_exception",

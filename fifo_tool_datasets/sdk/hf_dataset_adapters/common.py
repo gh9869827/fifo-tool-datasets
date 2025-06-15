@@ -195,9 +195,29 @@ class DatasetAdapter(ABC):
 
         val_ratio, test_ratio = split_ratios[1], split_ratios[2]
         total = len(dataset)
+
+        if total < 3:
+            raise ValueError("Dataset too small to split into train/val/test sets")
+
         val_size = int(total * val_ratio)
         test_size = int(total * test_ratio)
         train_size = total - val_size - test_size
+
+        # Validate each split
+        if val_size == 0:
+            raise ValueError(
+                f"Validation dataset is empty (val_ratio={val_ratio}, total={total})"
+            )
+
+        if test_size == 0:
+            raise ValueError(
+                f"Test dataset is empty (test_ratio={test_ratio}, total={total})"
+            )
+
+        if train_size == 0:
+            raise ValueError(
+                f"Train dataset is empty (total={total}, val={val_size}, test={test_size})"
+            )
 
         splits = {
             # Pylance: Type of select() is partially unknown
