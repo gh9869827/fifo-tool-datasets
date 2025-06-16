@@ -31,6 +31,7 @@ def main() -> None:
     copy_parser.add_argument("--split-ratio", nargs=3, type=float, metavar=('TRAIN', 'VAL', 'TEST'),
                              default=(0.7, 0.15, 0.15),
                              help="Only used when uploading a single .dat file. Ratios must sum to 1.0")
+    copy_parser.add_argument("-y", action="store_true", help="Overwrite existing local files or directories")
 
     # split
     split_parser = subparsers.add_parser("split", help="Split a .dat file into train/val/test directory")
@@ -82,6 +83,11 @@ def main() -> None:
 
         elif not src_is_file and dst_is_file:
             # hub → single .dat file (download + merge)
+            if os.path.exists(args.dst) and not args.y:
+                parser.error(
+                    f"Output file '{args.dst}' already exists. Use -y to overwrite."
+                )
+
             dataset_dict = adapter.from_hub_to_dataset_dict(args.src)
 
             merged = concatenate_datasets([
@@ -96,9 +102,16 @@ def main() -> None:
 
         elif not src_is_file and dst_is_dir:
             # hub → dir (download splits and write to disk)
-            dataset_dict = adapter.from_hub_to_dataset_dict(args.src)
-
+            if os.path.exists(args.dst):
+                existing = cast(list[str], os.listdir(args.dst))
+                if existing and not args.y:
+                    parser.error(
+                        f"Directory '{args.dst}' already exists and is not empty."
+                        " Use -y to overwrite."
+                    )
             os.makedirs(args.dst, exist_ok=True)
+
+            dataset_dict = adapter.from_hub_to_dataset_dict(args.src)
 
             for split_name in ("train", "validation", "test"):
                 split_data = dataset_dict[split_name]
