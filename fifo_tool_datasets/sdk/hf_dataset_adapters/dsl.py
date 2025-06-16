@@ -1,4 +1,4 @@
-from typing import Dict, Iterator, cast
+from typing import Any, Dict, Iterator, cast
 from datasets import (  # type: ignore
     Dataset,
     DatasetDict,
@@ -73,7 +73,7 @@ class DSLAdapter(DatasetAdapter):
         flat_data: dict[str, list[str]] = {"system": [], "in": [], "out": []}
 
         with open(dat_filename, "r", encoding="utf-8") as f:
-            lines = [line.rstrip("\r\n") for line in f if line.strip()]
+            lines = [line.rstrip("\r\n") for line in f]
 
         if not lines:
             raise SyntaxError("The file is empty.")
@@ -81,29 +81,73 @@ class DSLAdapter(DatasetAdapter):
         if lines[0] != "---":
             raise SyntaxError("The file must start with '---'.")
 
-        lines = lines[1:]
+        expected_tags = ["$", ">", "<"]
+        tag_idx = 0
+        current_tag: str | None = None
+        content_lines: list[str] = []
+        system = user_in = out = None
 
-        if len(lines) % 4 != 0:
-            raise SyntaxError("Each DSL sample must span 4 lines (including ---).")
+        def finalize_tag(tag: str, line_no: int) -> None:
+            nonlocal tag_idx, system, user_in, out, content_lines
+            if not content_lines:
+                raise SyntaxError(f"Empty tag '{tag}' detected at line {line_no}")
+            text = "\n".join(content_lines)
+            if tag == "$":
+                system = text
+            elif tag == ">":
+                user_in = text
+            else:  # tag == "<"
+                out = text
+            tag_idx += 1
+            content_lines = []
 
-        for i in range(0, len(lines), 4):
-            if lines[i + 3] != "---":
-                raise SyntaxError(f"Missing '---' block delimiter at line {i + 2 + 3}.")
+        for line_number, line in enumerate(lines[1:], start=2):
+            if tag_idx == 3 or line == "---":
+                if current_tag is not None:
+                    finalize_tag(current_tag, line_number)
+                    current_tag = None
+                if line != "---":
+                    raise SyntaxError(f"Missing '---' block delimiter at line {line_number}.")
+                if tag_idx != 3:
+                    raise SyntaxError("Each DSL sample must contain $, > and < in order.")
+                flat_data["system"].append(cast(str, system))
+                flat_data["in"].append(cast(str, user_in))
+                flat_data["out"].append(cast(str, out))
+                system = user_in = out = None
+                tag_idx = 0
+                continue
 
-            system_line = lines[i]
-            in_line = lines[i + 1]
-            out_line = lines[i + 2]
+            if line.startswith(("$", ">", "<")):
+                if current_tag is not None:
+                    finalize_tag(current_tag, line_number)
+                    current_tag = None
+                tag_char = line[0]
+                if tag_char != expected_tags[tag_idx]:
+                    role = ["system", "input", "output"][tag_idx]
+                    raise SyntaxError(
+                        f"Expected '{expected_tags[tag_idx]}' at start of {role} line in block at line {line_number}."
+                    )
+                rest = line[1:]
+                if rest.startswith(" "):
+                    rest = rest[1:]
+                if rest:
+                    content_lines = [rest]
+                    finalize_tag(tag_char, line_number)
+                else:
+                    current_tag = tag_char
+                    content_lines = []
+                continue
 
-            if not system_line.startswith("$"):
-                raise SyntaxError(f"Expected '$' at start of system line in block at line {i + 2}.")
-            if not in_line.startswith(">"):
-                raise SyntaxError(f"Expected '>' at start of input line in block at line {i + 3}.")
-            if not out_line.startswith("<"):
-                raise SyntaxError(f"Expected '<' at start of output line in block at line {i + 4}.")
+            if current_tag is None:
+                role = ["system", "input", "output"][tag_idx]
+                raise SyntaxError(
+                    f"Expected '{expected_tags[tag_idx]}' at start of {role} line in block at line {line_number}."
+                )
 
-            flat_data["system"].append(system_line[1:].strip())
-            flat_data["in"].append(in_line[1:].strip())
-            flat_data["out"].append(out_line[1:].strip())
+            content_lines.append(line)
+
+        if current_tag is not None or tag_idx != 0:
+            raise SyntaxError(f"DSL sample is not closed properly, last line {len(lines)}")
 
         # Pylance: Type of from_dict() is partially unknown
         return Dataset.from_dict(flat_data) # type: ignore[reportUnknownMemberType]
@@ -215,12 +259,18 @@ class DSLAdapter(DatasetAdapter):
             dat_filename (str):
                 Output path for the DAT file.
         """
+        def write_section(fh: Any, tag: str, text: str) -> None:
+            if "\n" in text:
+                fh.write(f"{tag}\n{text}\n")
+            else:
+                fh.write(f"{tag} {text}\n")
+
         with open(dat_filename, "w", encoding="utf-8") as f:
             f.write("---\n")
             for record in self._iter_wide_records(wide_dataset):
-                f.write(f"${record['system']}\n")
-                f.write(f">{record['in']}\n")
-                f.write(f"<{record['out']}\n")
+                write_section(f, "$", record["system"])
+                write_section(f, ">", record["in"])
+                write_section(f, "<", record["out"])
                 f.write("---\n")
 
     def _iter_wide_records(self, dataset: Dataset) -> Iterator[Dict[str, str]]:

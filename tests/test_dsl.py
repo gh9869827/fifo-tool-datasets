@@ -24,6 +24,27 @@ EXPECTED_DSL_02_WIDE: list[dict[str, str]] = [
     {"system": "System prompt #2", "in": "in #2", "out": "out #2"}
 ]
 
+EXPECTED_DSL_03_WIDE: list[dict[str, str]] = [
+    {
+        "system": (
+            "only one line. Note that after the $ there is a blank added for readability. "
+            "It is optional when reading a file. But when generating a dat file, always add it."
+        ),
+        "in": "only one line. Same note as above about the blank.",
+        "out": "only one line. Same note as above about the blank.",
+    },
+    {
+        "system": "when multi lines\nare needed it is formatted\nlike that",
+        "in": "only one line. Same note as above about the blank.",
+        "out": "only one line. Same note as above about the blank.",
+    },
+    {
+        "system": "still one line.",
+        "in": "one line\nand\nanother here",
+        "out": "but only one here is supported, i.e. one record with single vs multi lines.",
+    },
+]
+
 EXPECTED_DSL_01_STRUCTURED = [
     {"messages": [
         {"role": "system",     "content": "System prompt #1"},
@@ -45,10 +66,44 @@ EXPECTED_DSL_02_STRUCTURED = [
     ]}
 ]
 
+EXPECTED_DSL_03_STRUCTURED = [
+    {
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "only one line. Note that after the $ there is a blank added for readability. "
+                    "It is optional when reading a file. But when generating a dat file, always add it."
+                ),
+            },
+            {"role": "user", "content": "only one line. Same note as above about the blank."},
+            {"role": "assistant", "content": "only one line. Same note as above about the blank."},
+        ]
+    },
+    {
+        "messages": [
+            {"role": "system", "content": "when multi lines\nare needed it is formatted\nlike that"},
+            {"role": "user", "content": "only one line. Same note as above about the blank."},
+            {"role": "assistant", "content": "only one line. Same note as above about the blank."},
+        ]
+    },
+    {
+        "messages": [
+            {"role": "system", "content": "still one line."},
+            {"role": "user", "content": "one line\nand\nanother here"},
+            {
+                "role": "assistant",
+                "content": "but only one here is supported, i.e. one record with single vs multi lines.",
+            },
+        ]
+    },
+]
+
 
 @pytest.mark.parametrize("filename,expected", [
     ("dsl_01.dat", EXPECTED_DSL_01_WIDE),
-    ("dsl_02.dat", EXPECTED_DSL_02_WIDE)
+    ("dsl_02.dat", EXPECTED_DSL_02_WIDE),
+    ("dsl_03.dat", EXPECTED_DSL_03_WIDE)
 ])
 def test_from_dat_to_wide_dataset(filename: str, expected: list[dict[str, str]]):
     adapter = DSLAdapter()
@@ -63,7 +118,7 @@ def test_from_dat_to_wide_dataset(filename: str, expected: list[dict[str, str]])
 
 @pytest.mark.parametrize("filename,expected_error", [
     ("dsl_broken_01.dat", r"The file must start with '---'."),
-    ("dsl_broken_02.dat", r"Each DSL sample must span 4 lines \(including ---\)."),
+    ("dsl_broken_02.dat", r"DSL sample is not closed properly, last line 8"),
     ("dsl_broken_03.dat", r"Missing '---' block delimiter at line 5."),
     ("dsl_broken_04.dat", r"Expected '<' at start of output line in block at line 4."),
     ("dsl_broken_05.dat", r"Expected '>' at start of input line in block at line 3."),
@@ -85,6 +140,7 @@ def normalize_dat(content: str) -> str:
 @pytest.mark.parametrize("filename", [
     "dsl_01.dat",
     "dsl_02.dat",
+    "dsl_03.dat",
 ])
 def test_roundtrip_wide_to_dat(filename: str) -> None:
     adapter = DSLAdapter()
@@ -110,6 +166,7 @@ def test_roundtrip_wide_to_dat(filename: str) -> None:
 @pytest.mark.parametrize("filename,expected", [
     ("dsl_01.dat", EXPECTED_DSL_01_STRUCTURED),
     ("dsl_02.dat", EXPECTED_DSL_02_STRUCTURED),
+    ("dsl_03.dat", EXPECTED_DSL_03_STRUCTURED),
 ])
 def test_from_wide_dataset_to_json_dsl(
     filename: str,
@@ -131,6 +188,7 @@ def test_from_wide_dataset_to_json_dsl(
     [
         (EXPECTED_DSL_01_STRUCTURED, EXPECTED_DSL_01_WIDE),
         (EXPECTED_DSL_02_STRUCTURED, EXPECTED_DSL_02_WIDE),
+        (EXPECTED_DSL_03_STRUCTURED, EXPECTED_DSL_03_WIDE),
     ]
 )
 def test_from_dataset_to_wide_dataset_dsl(
