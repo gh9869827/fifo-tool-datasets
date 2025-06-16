@@ -109,7 +109,7 @@ fifo-tool-datasets <command> [options]
 Upload or download datasets between `.dat` files (or directories) and the Hugging Face Hub.
 
 ```bash
-fifo-tool-datasets copy <src> <dst> --adapter <adapter> [--commit-message <msg>] [--seed <int>]
+fifo-tool-datasets copy <src> <dst> --adapter <adapter> [--commit-message <msg>] [--seed <int>] [-y]
 ```
 
 - `.dat` or directory → hub: requires `--commit-message`
