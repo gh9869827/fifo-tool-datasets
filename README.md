@@ -263,11 +263,18 @@ Hello!
 
 #### `.dat`
 
-```
+```text
 ---
-$You are a precise DSL parser.
->today at 5:30PM
-<SET_TIME(TODAY, 17, 30)
+$ You are a precise DSL parser.
+> today at 5:30PM
+< SET_TIME(TODAY, 17, 30)
+---
+
+$
+multi-line system
+prompt
+> multi-line input
+< multi-line output
 ---
 ```
 
@@ -301,7 +308,7 @@ Each adapter enforces its own parsing rules:
 
 - `ConversationAdapter`: tag order, message required after each tag, conversation structure
 - `SQNAAdapter`: strictly `>` then `<`, per pair
-- `DSLAdapter`: must follow `---`, `$`, `>`, `<`, `---` per block, all in single lines
+- `DSLAdapter`: each block must contain `$`, `>`, `<` in this order. Values may span multiple lines; single-line values are written with a space after the tag when generating `.dat` files.
 
 ---
 

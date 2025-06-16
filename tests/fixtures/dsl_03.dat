@@ -1,0 +1,19 @@
+---
+$ only one line. Note that after the $ there is a blank added for readability. It is optional when reading a file. But when generating a dat file, always add it.
+> only one line. Same note as above about the blank.
+< only one line. Same note as above about the blank.
+---
+$
+when multi lines
+are needed it is formatted
+like that
+> only one line. Same note as above about the blank.
+< only one line. Same note as above about the blank.
+---
+$ still one line.
+>
+one line
+and
+another here
+< but only one here is supported, i.e. one record with single vs multi lines.
+---
