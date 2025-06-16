@@ -43,6 +43,11 @@ EXPECTED_DSL_03_WIDE: list[dict[str, str]] = [
         "in": "one line\nand\nanother here",
         "out": "but only one here is supported, i.e. one record with single vs multi lines.",
     },
+    {
+        "system": "line 1\nline 2",
+        "in": "user input 1\nuser input 2",
+        "out": "dsl output 1\ndsl output 2",
+    },
 ]
 
 EXPECTED_DSL_01_STRUCTURED = [
@@ -97,6 +102,13 @@ EXPECTED_DSL_03_STRUCTURED = [
             },
         ]
     },
+    {
+        "messages": [
+            {"role": "system", "content": "line 1\nline 2"},
+            {"role": "user", "content": "user input 1\nuser input 2"},
+            {"role": "assistant", "content": "dsl output 1\ndsl output 2"},
+        ]
+    },
 ]
 
 
@@ -124,6 +136,12 @@ def test_from_dat_to_wide_dataset(filename: str, expected: list[dict[str, str]])
     ("dsl_broken_05.dat", r"Expected '>' at start of input line in block at line 3."),
     ("dsl_broken_06.dat", r"Expected '\$' at start of system line in block at line 2."),
     ("dsl_broken_07.dat", r"Expected '\$' at start of system line in block at line 2."),
+    ("dsl_broken_08.dat", r"Expected '>' at start of input line in block at line 7."),
+    ("dsl_broken_09.dat", r"Missing '---' block delimiter at line 5."),
+    ("dsl_broken_10.dat", r"Each DSL sample must contain \$, > and < in order at line 4."),
+    ("dsl_broken_11.dat", r"The file is empty."),
+    ("dsl_broken_12.dat", r"Empty tag '>' detected at line 4."),
+    ("dsl_broken_13.dat", r"Empty tag '<' detected at line 8."),
 ])
 def test_from_dat_to_wide_dataset_broken(filename: str, expected_error: str) -> None:
     adapter = DSLAdapter()

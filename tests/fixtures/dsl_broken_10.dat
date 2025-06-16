@@ -1,0 +1,10 @@
+---
+$ System prompt #1
+> in #1
+---
+$ System prompt #2
+<
+out #2 a
+out #2 b
+> in #2
+---

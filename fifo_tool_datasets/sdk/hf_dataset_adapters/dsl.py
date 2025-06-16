@@ -1,4 +1,4 @@
-from typing import Any, Dict, Iterator, cast
+from typing import Dict, Iterator, TextIO, cast
 from datasets import (  # type: ignore
     Dataset,
     DatasetDict,
@@ -16,12 +16,29 @@ class DSLAdapter(DatasetAdapter):
       - One user input per sample
       - One DSL output per sample
 
-    Expected compact `.dat` file format (3 lines per sample):
+    Expected compact `.dat` file format (3 lines per sample - with optional space after marker):
         ---
-        $<system_prompt>
-        ><user_input>
-        <<dsl_output>
+        $ <system_prompt>
+        ><user_input>  # no space required after marker
+        < <dsl_output>
         ---
+
+    Multi-line entries are supported and can be freely mixed with single-line entries. To write a
+    multi-line value, place the marker on its own line (e.g., just `$`, `>`, or `<`), followed by
+    the content block:
+
+        ---
+        $
+        <system_prompt line 1>
+        <system_prompt line 2>
+        >
+        <user_input line 1>
+        <user_input line 2>
+        < <dsl_output> # single line input
+        ---
+
+    Each block (`$`, `>`, `<`) supports multi-line values using this style. The parser automatically
+    detects and parses both formats.
 
     Wide-format dataset fields:
         - system (str): system prompt (can be reused or unique)
@@ -30,9 +47,9 @@ class DSLAdapter(DatasetAdapter):
 
     Example `.dat` file:
         ---
-        $You are a precise DSL parser.
-        >set alarm tomorrow at 7am
-        <SET_ALARM(TOMORROW, 7, 0)
+        $ You are a precise DSL parser.
+        > set alarm tomorrow at 7am
+        < SET_ALARM(TOMORROW, 7, 0)
         ---
 
     Corresponding dataset (wide format):
@@ -55,6 +72,7 @@ class DSLAdapter(DatasetAdapter):
             }
         ]
     """
+
     def from_dat_to_wide_dataset(self, dat_filename: str) -> Dataset:
         """
         Parses a DSL DAT file into a wide-format Huggingface Dataset.
@@ -85,54 +103,49 @@ class DSLAdapter(DatasetAdapter):
         tag_idx = 0
         current_tag: str | None = None
         content_lines: list[str] = []
-        system = user_in = out = None
+        tag_values: list[str | None] = [None, None, None]
 
-        def finalize_tag(tag: str, line_no: int) -> None:
-            nonlocal tag_idx, system, user_in, out, content_lines
-            if not content_lines:
-                raise SyntaxError(f"Empty tag '{tag}' detected at line {line_no}")
-            text = "\n".join(content_lines)
-            if tag == "$":
-                system = text
-            elif tag == ">":
-                user_in = text
-            else:  # tag == "<"
-                out = text
+        def finalize_tag(tag: str, line_no: int, tag_idx: int) -> int:
+            if not content_lines or all(x == "" for x in content_lines):
+                raise SyntaxError(f"Empty tag '{tag}' detected at line {line_no}.")
+            tag_values[tag_idx] = "\n".join(content_lines)
             tag_idx += 1
-            content_lines = []
+            content_lines.clear()
+            return tag_idx
 
         for line_number, line in enumerate(lines[1:], start=2):
             if tag_idx == 3 or line == "---":
                 if current_tag is not None:
-                    finalize_tag(current_tag, line_number)
+                    tag_idx = finalize_tag(current_tag, line_number, tag_idx)
                     current_tag = None
                 if line != "---":
                     raise SyntaxError(f"Missing '---' block delimiter at line {line_number}.")
                 if tag_idx != 3:
-                    raise SyntaxError("Each DSL sample must contain $, > and < in order.")
-                flat_data["system"].append(cast(str, system))
-                flat_data["in"].append(cast(str, user_in))
-                flat_data["out"].append(cast(str, out))
-                system = user_in = out = None
+                    raise SyntaxError("Each DSL sample must contain $, > and < in order "
+                                      f"at line {line_number}.")
+                for _idx, _tag in enumerate(["system", "in", "out"]):
+                    flat_data[_tag].append(cast(str, tag_values[_idx]))
+                tag_values[:] = [None, None, None]
                 tag_idx = 0
                 continue
 
             if line.startswith(("$", ">", "<")):
                 if current_tag is not None:
-                    finalize_tag(current_tag, line_number)
+                    tag_idx = finalize_tag(current_tag, line_number, tag_idx)
                     current_tag = None
                 tag_char = line[0]
                 if tag_char != expected_tags[tag_idx]:
                     role = ["system", "input", "output"][tag_idx]
                     raise SyntaxError(
-                        f"Expected '{expected_tags[tag_idx]}' at start of {role} line in block at line {line_number}."
+                        f"Expected '{expected_tags[tag_idx]}' at start of {role} line in block "
+                        f"at line {line_number}."
                     )
                 rest = line[1:]
-                if rest.startswith(" "):
-                    rest = rest[1:]
                 if rest:
+                    if rest.startswith(" "):
+                        rest = rest[1:]
                     content_lines = [rest]
-                    finalize_tag(tag_char, line_number)
+                    tag_idx = finalize_tag(tag_char, line_number, tag_idx)
                 else:
                     current_tag = tag_char
                     content_lines = []
@@ -141,7 +154,8 @@ class DSLAdapter(DatasetAdapter):
             if current_tag is None:
                 role = ["system", "input", "output"][tag_idx]
                 raise SyntaxError(
-                    f"Expected '{expected_tags[tag_idx]}' at start of {role} line in block at line {line_number}."
+                    f"Expected '{expected_tags[tag_idx]}' at start of {role} line in block "
+                    f"at line {line_number}."
                 )
 
             content_lines.append(line)
@@ -259,7 +273,7 @@ class DSLAdapter(DatasetAdapter):
             dat_filename (str):
                 Output path for the DAT file.
         """
-        def write_section(fh: Any, tag: str, text: str) -> None:
+        def write_section(fh: TextIO, tag: str, text: str) -> None:
             if "\n" in text:
                 fh.write(f"{tag}\n{text}\n")
             else:

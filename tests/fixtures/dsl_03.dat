@@ -17,3 +17,13 @@ and
 another here
 < but only one here is supported, i.e. one record with single vs multi lines.
 ---
+$
+line 1
+line 2
+>
+user input 1
+user input 2
+<
+dsl output 1
+dsl output 2
+---

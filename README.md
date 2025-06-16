@@ -269,12 +269,18 @@ $ You are a precise DSL parser.
 > today at 5:30PM
 < SET_TIME(TODAY, 17, 30)
 ---
+```
 
+Multi-line entries are also supported and can be freely mixed with single-line ones. 
+A space after the marker on single-line entries is optional:
+
+```text
+---
 $
 multi-line system
 prompt
-> multi-line input
-< multi-line output
+> single-line input
+<single-line output
 ---
 ```
 
