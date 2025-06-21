@@ -284,7 +284,7 @@ prompt
 ---
 ```
 
-To reuse the previous system prompt across several samples, use `...`:
+To reuse the previous system prompt across multiple samples, use `...`:
 
 ```text
 ---
@@ -303,10 +303,10 @@ $
 ---
 ```
 
-Any `$` block that contains only `...` (on the same line or the next line) will
-inherit the most recent explicit system prompt. At least one non-`...` system
-prompt is required in the file. When generating `.dat` files, consecutive
-identical system prompts are collapsed into `$ ...`.
+Any `$` block that contains only `...` — either directly after the `$` or on the following line — will inherit the most recent explicitly defined system prompt.
+
+- At least one non-`...` system prompt is required in the file.
+- When generating `.dat` files, consecutive identical system prompts are automatically collapsed into `$ ...`.
 
 #### Wide Format
 
