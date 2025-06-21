@@ -50,6 +50,11 @@ def main() -> None:
     merge_parser.add_argument("--adapter", choices=ADAPTERS.keys(), required=True)
     merge_parser.add_argument("-y", action="store_true", help="Overwrite existing .dat file")
 
+    # sort
+    sort_parser = subparsers.add_parser("sort", help="Sort DSL .dat files by system prompt")
+    sort_parser.add_argument("path", help=".dat file or directory to sort in place")
+    sort_parser.add_argument("--adapter", choices=["dsl"], default="dsl")
+
     args = parser.parse_args()
     adapter = ADAPTERS[args.adapter]
 
@@ -188,6 +193,25 @@ def main() -> None:
         adapter.from_dataset_to_dat(merged, out_file)
 
         print(f"📅 total: {total_records} records")
+
+    elif args.command == "sort":
+        if args.adapter != "dsl":
+            parser.error("The sort command currently supports only the 'dsl' adapter.")
+
+        target = args.path
+        if os.path.isdir(target):
+            files = [f for f in os.listdir(target) if f.endswith(".dat")]
+            if not files:
+                parser.error("No .dat files found in the directory.")
+            for name in files:
+                file_path = os.path.join(target, name)
+                adapter.sort_dat_file(file_path)
+                print(f"✅ sorted {file_path}")
+        elif os.path.isfile(target):
+            adapter.sort_dat_file(target)
+            print(f"✅ sorted {target}")
+        else:
+            parser.error(f"Path '{target}' does not exist")
 
 if __name__ == "__main__":
     main()
