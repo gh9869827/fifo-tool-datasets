@@ -50,6 +50,14 @@ EXPECTED_DSL_03_WIDE: list[dict[str, str]] = [
     },
 ]
 
+EXPECTED_DSL_04_WIDE: list[dict[str, str]] = [
+    {"system": "Sys #1", "in": "in #1", "out": "out #1"},
+    {"system": "Sys #1", "in": "in #2", "out": "out #2"},
+    {"system": "Sys multi\nline", "in": "in #3", "out": "out #3"},
+    {"system": "Sys multi\nline", "in": "in #4", "out": "out #4"},
+    {"system": "Sys multi\nline", "in": "in #5", "out": "out #5"},
+]
+
 EXPECTED_DSL_01_STRUCTURED = [
     {"messages": [
         {"role": "system",     "content": "System prompt #1"},
@@ -111,11 +119,40 @@ EXPECTED_DSL_03_STRUCTURED = [
     },
 ]
 
+EXPECTED_DSL_04_STRUCTURED = [
+    {"messages": [
+        {"role": "system", "content": "Sys #1"},
+        {"role": "user", "content": "in #1"},
+        {"role": "assistant", "content": "out #1"},
+    ]},
+    {"messages": [
+        {"role": "system", "content": "Sys #1"},
+        {"role": "user", "content": "in #2"},
+        {"role": "assistant", "content": "out #2"},
+    ]},
+    {"messages": [
+        {"role": "system", "content": "Sys multi\nline"},
+        {"role": "user", "content": "in #3"},
+        {"role": "assistant", "content": "out #3"},
+    ]},
+    {"messages": [
+        {"role": "system", "content": "Sys multi\nline"},
+        {"role": "user", "content": "in #4"},
+        {"role": "assistant", "content": "out #4"},
+    ]},
+    {"messages": [
+        {"role": "system", "content": "Sys multi\nline"},
+        {"role": "user", "content": "in #5"},
+        {"role": "assistant", "content": "out #5"},
+    ]},
+]
+
 
 @pytest.mark.parametrize("filename,expected", [
     ("dsl_01.dat", EXPECTED_DSL_01_WIDE),
     ("dsl_02.dat", EXPECTED_DSL_02_WIDE),
-    ("dsl_03.dat", EXPECTED_DSL_03_WIDE)
+    ("dsl_03.dat", EXPECTED_DSL_03_WIDE),
+    ("dsl_04.dat", EXPECTED_DSL_04_WIDE)
 ])
 def test_from_dat_to_wide_dataset(filename: str, expected: list[dict[str, str]]):
     adapter = DSLAdapter()
@@ -142,6 +179,7 @@ def test_from_dat_to_wide_dataset(filename: str, expected: list[dict[str, str]])
     ("dsl_broken_11.dat", r"The file is empty."),
     ("dsl_broken_12.dat", r"Empty tag '>' detected at line 4."),
     ("dsl_broken_13.dat", r"Empty tag '<' detected at line 8."),
+    ("dsl_broken_14.dat", r"System prompt placeholder '\.\.\.' without preceding system at line 2."),
 ])
 def test_from_dat_to_wide_dataset_broken(filename: str, expected_error: str) -> None:
     adapter = DSLAdapter()
@@ -181,10 +219,45 @@ def test_roundtrip_wide_to_dat(filename: str) -> None:
     assert roundtrip == original
 
 
+def test_wide_to_dat_collapses_system_prompt() -> None:
+    adapter = DSLAdapter()
+    dataset = Dataset.from_dict(  # type: ignore[reportUnknownMemberType]
+        {
+            "system": ["Repeat", "Repeat", "Other"],
+            "in": ["q1", "q2", "q3"],
+            "out": ["a1", "a2", "a3"],
+        }
+    )
+
+    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".dat") as tmp:
+        tmp_path = pathlib.Path(tmp.name)
+        adapter.from_wide_dataset_to_dat(dataset, str(tmp_path))
+
+    with open(tmp_path, "r", encoding="utf-8") as f:
+        content = normalize_dat(f.read())
+
+    assert content.splitlines() == [
+        "---",
+        "$ Repeat",
+        "> q1",
+        "< a1",
+        "---",
+        "$ ...",
+        "> q2",
+        "< a2",
+        "---",
+        "$ Other",
+        "> q3",
+        "< a3",
+        "---",
+    ]
+
+
 @pytest.mark.parametrize("filename,expected", [
     ("dsl_01.dat", EXPECTED_DSL_01_STRUCTURED),
     ("dsl_02.dat", EXPECTED_DSL_02_STRUCTURED),
     ("dsl_03.dat", EXPECTED_DSL_03_STRUCTURED),
+    ("dsl_04.dat", EXPECTED_DSL_04_STRUCTURED),
 ])
 def test_from_wide_dataset_to_json_dsl(
     filename: str,
