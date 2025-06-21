@@ -1,5 +1,6 @@
 import argparse
 import os
+from pathlib import Path
 from typing import cast
 # Pylance: suppress missing type stub warning for datasets
 from datasets import (  # type: ignore
@@ -195,18 +196,17 @@ def main() -> None:
         print(f"📅 total: {total_records} records")
 
     elif args.command == "sort":
-        if args.adapter != "dsl":
+        if not isinstance(adapter, DSLAdapter):
             parser.error("The sort command currently supports only the 'dsl' adapter.")
 
         target = args.path
         if os.path.isdir(target):
-            files = [f for f in os.listdir(target) if f.endswith(".dat")]
+            files = [f for f in Path(target).iterdir() if f.suffix == ".dat"]
             if not files:
                 parser.error("No .dat files found in the directory.")
-            for name in files:
-                file_path = os.path.join(target, name)
-                adapter.sort_dat_file(file_path)
-                print(f"✅ sorted {file_path}")
+            for file in files:
+                adapter.sort_dat_file(str(file))
+                print(f"✅ sorted {file}")
         elif os.path.isfile(target):
             adapter.sort_dat_file(target)
             print(f"✅ sorted {target}")
