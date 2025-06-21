@@ -40,6 +40,13 @@ class DSLAdapter(DatasetAdapter):
     Each block (`$`, `>`, `<`) supports multi-line values using this style. The parser automatically
     detects and parses both formats.
 
+    To avoid repeating the same system prompt across many samples, a `$` section
+    may contain only `...`. This placeholder indicates that the system prompt is
+    identical to the previous explicit one (on the same line as `$ ...` or on a
+    separate line after `$`). At least one explicit system prompt must appear
+    before any `...` is used. When writing a dataset back to `.dat`, consecutive
+    identical system prompts are automatically replaced with `$ ...`.
+
     Wide-format dataset fields:
         - system (str): system prompt (can be reused or unique)
         - in (str): user input string
@@ -104,11 +111,28 @@ class DSLAdapter(DatasetAdapter):
         current_tag: str | None = None
         content_lines: list[str] = []
         tag_values: list[str | None] = [None, None, None]
+        previous_system: str | None = None
+        has_explicit_system = False
 
         def finalize_tag(tag: str, line_no: int, tag_idx: int) -> int:
             if not content_lines or all(x == "" for x in content_lines):
                 raise SyntaxError(f"Empty tag '{tag}' detected at line {line_no}.")
-            tag_values[tag_idx] = "\n".join(content_lines)
+
+            value = "\n".join(content_lines)
+
+            nonlocal previous_system, has_explicit_system
+            if tag == "$":
+                if value.strip() == "...":
+                    if previous_system is None:
+                        raise SyntaxError(
+                            f"System prompt placeholder '...' without preceding system at line {line_no}."
+                        )
+                    value = previous_system
+                else:
+                    previous_system = value
+                    has_explicit_system = True
+
+            tag_values[tag_idx] = value
             tag_idx += 1
             content_lines.clear()
             return tag_idx
@@ -162,6 +186,9 @@ class DSLAdapter(DatasetAdapter):
 
         if current_tag is not None or tag_idx != 0:
             raise SyntaxError(f"DSL sample is not closed properly, last line {len(lines)}")
+
+        if not has_explicit_system:
+            raise SyntaxError("File must contain at least one explicit system prompt before using '...'.")
 
         # Pylance: Type of from_dict() is partially unknown
         return Dataset.from_dict(flat_data) # type: ignore[reportUnknownMemberType]
@@ -272,6 +299,9 @@ class DSLAdapter(DatasetAdapter):
 
             dat_filename (str):
                 Output path for the DAT file.
+
+        Consecutive rows with the same system prompt are collapsed using
+        `$ ...` to avoid repetition.
         """
         def write_section(fh: TextIO, tag: str, text: str) -> None:
             if "\n" in text:
@@ -281,8 +311,14 @@ class DSLAdapter(DatasetAdapter):
 
         with open(dat_filename, "w", encoding="utf-8") as f:
             f.write("---\n")
+            previous_system: str | None = None
             for record in self._iter_wide_records(wide_dataset):
-                write_section(f, "$", record["system"])
+                system_prompt = record["system"]
+                if previous_system is not None and system_prompt == previous_system:
+                    write_section(f, "$", "...")
+                else:
+                    write_section(f, "$", system_prompt)
+                    previous_system = system_prompt
                 write_section(f, ">", record["in"])
                 write_section(f, "<", record["out"])
                 f.write("---\n")

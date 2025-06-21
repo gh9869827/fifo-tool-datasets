@@ -271,7 +271,7 @@ $ You are a precise DSL parser.
 ---
 ```
 
-Multi-line entries are also supported and can be freely mixed with single-line ones. 
+Multi-line entries are also supported and can be freely mixed with single-line ones.
 A space after the marker on single-line entries is optional:
 
 ```text
@@ -283,6 +283,30 @@ prompt
 <single-line output
 ---
 ```
+
+To reuse the previous system prompt across several samples, use `...`:
+
+```text
+---
+$ first prompt
+> q1
+< a1
+---
+$ ...
+> q2
+< a2
+---
+$
+...
+> q3
+< a3
+---
+```
+
+Any `$` block that contains only `...` (on the same line or the next line) will
+inherit the most recent explicit system prompt. At least one non-`...` system
+prompt is required in the file. When generating `.dat` files, consecutive
+identical system prompts are collapsed into `$ ...`.
 
 #### Wide Format
 
@@ -314,7 +338,7 @@ Each adapter enforces its own parsing rules:
 
 - `ConversationAdapter`: tag order, message required after each tag, conversation structure
 - `SQNAAdapter`: strictly `>` then `<`, per pair
-- `DSLAdapter`: each block must contain `$`, `>`, `<` in this order. Values may span multiple lines; single-line values are written with a space after the tag when generating `.dat` files.
+- `DSLAdapter`: each block must contain `$`, `>`, `<` in this order. `$ ...` reuses the previous system prompt. Values may span multiple lines; single-line values are written with a space after the tag when generating `.dat` files. When writing `.dat` files, consecutive identical system prompts are replaced by `$ ...` automatically.
 
 ---
 
