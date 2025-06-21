@@ -326,3 +326,35 @@ def test_from_hub_to_dataset_wide_dict_success() -> None:
         result = adapter.from_hub_to_dataset_wide_dict("username/dataset")
         assert isinstance(result, DatasetDict)
         assert set(cast(list[str], result.keys())) == {"train", "validation", "test"}
+
+
+def test_sort_dat_file(tmp_path: pathlib.Path) -> None:
+    adapter = DSLAdapter()
+    dat_path = tmp_path / "unsorted.dat"
+    dat_path.write_text(
+        """---
+$ b
+> q2
+< a2
+---
+$ a
+> q1
+< a1
+---
+$ b
+> q1
+< a0
+---
+""",
+        encoding="utf-8",
+    )
+
+    adapter.sort_dat_file(str(dat_path))
+
+    sorted_ds = adapter.from_dat_to_wide_dataset(str(dat_path))
+    # Pylance: Type of to_list() is partially unknown
+    assert sorted_ds.to_list() == [  # type: ignore[reportUnknownMemberType]
+        {"system": "a", "in": "q1", "out": "a1"},
+        {"system": "b", "in": "q1", "out": "a0"},
+        {"system": "b", "in": "q2", "out": "a2"},
+    ]

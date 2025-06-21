@@ -131,6 +131,15 @@ Recombine split `.dat` files into a single dataset.
 fifo-tool-datasets merge <dir> --adapter <adapter> [--to <file>] [-y]
 ```
 
+#### `sort`
+
+Sort the samples of a DSL `.dat` file by system prompt. A directory will process
+every `.dat` file within.
+
+```bash
+fifo-tool-datasets sort <path> [--adapter dsl]
+```
+
 ---
 
 ### 💡 Command examples
@@ -147,6 +156,8 @@ fifo-tool-datasets split dsl.dat --adapter dsl --to split_dsl
 
 # Merge
 fifo-tool-datasets merge split_dsl --adapter dsl --to full.dsl.dat
+# Sort
+fifo-tool-datasets sort dsl.dat --adapter dsl
 ```
 
 ---
