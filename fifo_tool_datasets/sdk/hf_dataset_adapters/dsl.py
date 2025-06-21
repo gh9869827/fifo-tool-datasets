@@ -112,35 +112,37 @@ class DSLAdapter(DatasetAdapter):
         content_lines: list[str] = []
         tag_values: list[str | None] = [None, None, None]
         previous_system: str | None = None
-        has_explicit_system = False
 
-        def finalize_tag(tag: str, line_no: int, tag_idx: int) -> int:
+        def finalize_tag(tag: str,
+                         line_no: int,
+                         tag_idx: int,
+                         previous_system: str | None
+                         ) -> tuple[int, str | None]:
             if not content_lines or all(x == "" for x in content_lines):
                 raise SyntaxError(f"Empty tag '{tag}' detected at line {line_no}.")
 
             value = "\n".join(content_lines)
 
-            nonlocal previous_system, has_explicit_system
             if tag == "$":
                 if value.strip() == "...":
                     if previous_system is None:
-                        raise SyntaxError(
-                            f"System prompt placeholder '...' without preceding system at line {line_no}."
+                        raise SyntaxError("System prompt placeholder '...' without "
+                                          f"preceding system at line {line_no}."
                         )
                     value = previous_system
                 else:
                     previous_system = value
-                    has_explicit_system = True
 
             tag_values[tag_idx] = value
             tag_idx += 1
             content_lines.clear()
-            return tag_idx
+            return tag_idx, previous_system
 
         for line_number, line in enumerate(lines[1:], start=2):
             if tag_idx == 3 or line == "---":
                 if current_tag is not None:
-                    tag_idx = finalize_tag(current_tag, line_number, tag_idx)
+                    tag_idx, previous_system = \
+                        finalize_tag(current_tag, line_number, tag_idx, previous_system)
                     current_tag = None
                 if line != "---":
                     raise SyntaxError(f"Missing '---' block delimiter at line {line_number}.")
@@ -155,7 +157,8 @@ class DSLAdapter(DatasetAdapter):
 
             if line.startswith(("$", ">", "<")):
                 if current_tag is not None:
-                    tag_idx = finalize_tag(current_tag, line_number, tag_idx)
+                    tag_idx, previous_system = \
+                        finalize_tag(current_tag, line_number, tag_idx, previous_system)
                     current_tag = None
                 tag_char = line[0]
                 if tag_char != expected_tags[tag_idx]:
@@ -169,7 +172,8 @@ class DSLAdapter(DatasetAdapter):
                     if rest.startswith(" "):
                         rest = rest[1:]
                     content_lines = [rest]
-                    tag_idx = finalize_tag(tag_char, line_number, tag_idx)
+                    tag_idx, previous_system = \
+                        finalize_tag(tag_char, line_number, tag_idx, previous_system)
                 else:
                     current_tag = tag_char
                     content_lines = []
@@ -187,8 +191,9 @@ class DSLAdapter(DatasetAdapter):
         if current_tag is not None or tag_idx != 0:
             raise SyntaxError(f"DSL sample is not closed properly, last line {len(lines)}")
 
-        if not has_explicit_system:
-            raise SyntaxError("File must contain at least one explicit system prompt before using '...'.")
+        if not previous_system:
+            raise SyntaxError("File must contain at least one explicit"
+                              "system prompt before using '...'.")
 
         # Pylance: Type of from_dict() is partially unknown
         return Dataset.from_dict(flat_data) # type: ignore[reportUnknownMemberType]
