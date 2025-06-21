@@ -133,12 +133,15 @@ fifo-tool-datasets merge <dir> --adapter <adapter> [--to <file>] [-y]
 
 #### `sort`
 
-Sort the samples of a DSL `.dat` file by system prompt. A directory will process
-every `.dat` file within.
+Sort the samples of a DSL `.dat` file by their full content: system prompt, user input, and assistant response. Sorting is done **in place**, meaning the original file is overwritten with the sorted result.
+
+You can provide either a single file or a directory. If a directory is given, all `.dat` files within it will be sorted in place.
 
 ```bash
 fifo-tool-datasets sort <path> [--adapter dsl]
 ```
+
+Currently, only the `dsl` adapter is supported. If the `--adapter` flag is omitted, it defaults to `dsl` automatically.
 
 ---
 
@@ -156,6 +159,7 @@ fifo-tool-datasets split dsl.dat --adapter dsl --to split_dsl
 
 # Merge
 fifo-tool-datasets merge split_dsl --adapter dsl --to full.dsl.dat
+
 # Sort
 fifo-tool-datasets sort dsl.dat --adapter dsl
 ```

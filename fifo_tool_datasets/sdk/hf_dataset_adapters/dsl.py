@@ -349,14 +349,14 @@ class DSLAdapter(DatasetAdapter):
         return cast(Iterator[Dict[str, str]], iter(dataset))
 
     def sort_dat_file(self, dat_filename: str) -> None:
-        """Sort a DSL ``.dat`` file in-place by system prompt, then input and output.
+        """
+        Sort a DSL `.dat` file in place by system prompt, input, and output.
 
-        Parameters
-        ----------
-        dat_filename:
-            Path to the ``.dat`` file to sort. The file is read, parsed into a
-            wide dataset, sorted lexicographically on ``system``, ``in`` and
-            ``out`` fields and written back to the same location.
+        Args:
+            dat_filename (str):
+                Path to the `.dat` file to sort. The file is read, parsed into
+                a wide-format dataset, sorted lexicographically by `system`,
+                `in`, and `out` fields, and written back to the same location.
         """
         dataset = self.from_dat_to_wide_dataset(dat_filename)
         sorted_dataset = dataset.sort(["system", "in", "out"])
