@@ -1,5 +1,7 @@
 import argparse
 import os
+import re
+import sys
 from pathlib import Path
 from typing import cast
 # Pylance: suppress missing type stub warning for datasets
@@ -18,21 +20,156 @@ ADAPTERS: dict[str, DatasetAdapter] = {
     "dsl": DSLAdapter()
 }
 
+_HF_DATASET_RE = re.compile(r"^[^/]+/[^/]+$")
+
+
+def _is_hf_dataset(name: str) -> bool:
+    """Check whether a string matches the ``username/repo`` pattern.
+
+    Args:
+        name: The string to validate.
+
+    Returns:
+        ``True`` if ``name`` looks like a Hugging Face dataset identifier.
+    """
+
+    return bool(_HF_DATASET_RE.match(name))
+
+
+def _handle_upload(
+    args: argparse.Namespace, parser: argparse.ArgumentParser, adapter: DatasetAdapter
+) -> None:
+    """Execute the ``upload`` command.
+
+    Args:
+        args: Parsed command-line arguments.
+        parser: The argument parser used for error reporting.
+        adapter: Dataset adapter to perform the conversions.
+
+    Returns:
+        None.
+    """
+    if os.path.isfile(args.src):
+        if not args.src.endswith(".dat"):
+            parser.error("upload: source file must end with '.dat'")
+        src_is_file = True
+    elif os.path.isdir(args.src):
+        src_is_file = False
+    else:
+        parser.error(f"upload: source '{args.src}' is not a valid file or directory")
+
+    if not _is_hf_dataset(args.dst):
+        parser.error("upload: destination must be in 'username/repo' format")
+
+    if not args.commit_message:
+        parser.error("--commit-message is required when uploading to Hugging Face")
+
+    if src_is_file:
+        adapter.from_dat_to_hub(
+            dat_filename=args.src,
+            hub_dataset=args.dst,
+            commit_message=args.commit_message,
+            seed=args.seed,
+            split_ratios=tuple(args.split_ratio),
+        )
+    else:
+        adapter.from_dir_to_hub(
+            dat_dir=args.src,
+            hub_dataset=args.dst,
+            commit_message=args.commit_message,
+        )
+
+
+def _handle_download(
+    args: argparse.Namespace, parser: argparse.ArgumentParser, adapter: DatasetAdapter
+) -> None:
+    """Execute the ``download`` command.
+
+    Args:
+        args: Parsed command-line arguments.
+        parser: The argument parser used for error reporting.
+        adapter: Dataset adapter to perform the conversions.
+
+    Returns:
+        None.
+    """
+    if not _is_hf_dataset(args.src):
+        parser.error("download: source must be in 'username/repo' format")
+
+    dst_is_file = args.dst.endswith(".dat")
+
+    if dst_is_file:
+        if os.path.exists(args.dst) and not args.y:
+            parser.error(f"Output file '{args.dst}' already exists. Use -y to overwrite.")
+    else:
+        if os.path.exists(args.dst):
+            existing = cast(list[str], os.listdir(args.dst))
+            if existing and not args.y:
+                parser.error(
+                    f"Directory '{args.dst}' already exists and is not empty. Use -y to overwrite."
+                )
+        os.makedirs(args.dst, exist_ok=True)
+
+    dataset_dict = adapter.from_hub_to_dataset_dict(args.src)
+
+    if dst_is_file:
+        merged = concatenate_datasets([
+            dataset_dict["train"],
+            dataset_dict["validation"],
+            dataset_dict["test"],
+        ])
+        adapter.from_dataset_to_dat(merged, args.dst)
+        print(f"✅ merged {len(merged)} records")
+        print(f"📄 saved to {args.dst}")
+    else:
+        for split_name in ("train", "validation", "test"):
+            split_data = dataset_dict[split_name]
+            adapter.from_dataset_to_dat(
+                dataset=split_data,
+                dat_filename=os.path.join(args.dst, f"{split_name}.dat"),
+            )
+            print(f"✅ {split_name}: {len(split_data)} records")
+
+        print(f"📁 saved to {args.dst}")
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="fifo-tool-datasets CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # copy
-    copy_parser = subparsers.add_parser("copy", help="Upload/download between .dat and Hugging Face")
-    copy_parser.add_argument("src", help="Source .dat file, directory or Hugging Face dataset name")
-    copy_parser.add_argument("dst", help="Destination Hugging Face dataset name, directory or .dat file")
-    copy_parser.add_argument("--adapter", choices=ADAPTERS.keys(), required=True)
-    copy_parser.add_argument("--commit-message", help="Required if uploading to Hugging Face")
-    copy_parser.add_argument("--seed", type=int, default=None)
-    copy_parser.add_argument("--split-ratio", nargs=3, type=float, metavar=('TRAIN', 'VAL', 'TEST'),
-                             default=(0.7, 0.15, 0.15),
-                             help="Only used when uploading a single .dat file. Ratios must sum to 1.0")
-    copy_parser.add_argument("-y", action="store_true", help="Overwrite existing local files or directories")
+    # upload
+    upload_parser = subparsers.add_parser(
+        "upload", help="Upload a local .dat file or directory to the Hugging Face Hub"
+    )
+    upload_parser.add_argument("src", help="Local .dat file or directory")
+    upload_parser.add_argument(
+        "dst",
+        help="Destination dataset on Hugging Face (username/repo)",
+    )
+    upload_parser.add_argument("--adapter", choices=ADAPTERS.keys(), required=True)
+    upload_parser.add_argument("--commit-message", required=True, help="Commit message for the upload")
+    upload_parser.add_argument("--seed", type=int, default=42)
+    upload_parser.add_argument(
+        "--split-ratio",
+        nargs=3,
+        type=float,
+        metavar=("TRAIN", "VAL", "TEST"),
+        default=(0.7, 0.15, 0.15),
+        help="Only used when uploading a single .dat file. Ratios must sum to 1.0",
+    )
+
+    # download
+    download_parser = subparsers.add_parser(
+        "download", help="Download a dataset from the Hugging Face Hub"
+    )
+    download_parser.add_argument(
+        "src", help="Source dataset on Hugging Face (username/repo)"
+    )
+    download_parser.add_argument("dst", help="Destination directory or .dat file")
+    download_parser.add_argument("--adapter", choices=ADAPTERS.keys(), required=True)
+    download_parser.add_argument(
+        "-y", action="store_true", help="Overwrite existing local files or directories"
+    )
+
 
     # split
     split_parser = subparsers.add_parser("split", help="Split a .dat file into train/val/test directory")
@@ -59,78 +196,12 @@ def main() -> None:
     args = parser.parse_args()
     adapter = ADAPTERS[args.adapter]
 
-    if args.command == "copy":
-        src_is_file = os.path.isfile(args.src) and args.src.endswith(".dat")
-        src_is_dir = os.path.isdir(args.src)
-        dst_is_file = args.dst.endswith(".dat")
-        dst_is_dir = not dst_is_file
+    if args.command == "upload":
+        _handle_upload(args, parser, adapter)
 
-        if src_is_file and dst_is_dir:
-            # file → hub (split + upload)
-            if not args.commit_message:
-                parser.error("--commit-message is required when uploading to Hugging Face")
-            adapter.from_dat_to_hub(
-                dat_filename=args.src,
-                hub_dataset=args.dst,
-                commit_message=args.commit_message,
-                seed=args.seed,
-                split_ratios=tuple(args.split_ratio)  # already parsed to float[3]
-            )
+    elif args.command == "download":
+        _handle_download(args, parser, adapter)
 
-        elif src_is_dir and dst_is_dir:
-            # dir → hub (upload as-is)
-            if not args.commit_message:
-                parser.error("--commit-message is required when uploading to Hugging Face")
-            adapter.from_dir_to_hub(
-                dat_dir=args.src,
-                hub_dataset=args.dst,
-                commit_message=args.commit_message
-            )
-
-        elif not src_is_file and dst_is_file:
-            # hub → single .dat file (download + merge)
-            if os.path.exists(args.dst) and not args.y:
-                parser.error(
-                    f"Output file '{args.dst}' already exists. Use -y to overwrite."
-                )
-
-            dataset_dict = adapter.from_hub_to_dataset_dict(args.src)
-
-            merged = concatenate_datasets([
-                dataset_dict["train"],
-                dataset_dict["validation"],
-                dataset_dict["test"]
-            ])
-
-            adapter.from_dataset_to_dat(merged, args.dst)
-            print(f"✅ merged {len(merged)} records")
-            print(f"📄 saved to {args.dst}")
-
-        elif not src_is_file and dst_is_dir:
-            # hub → dir (download splits and write to disk)
-            if os.path.exists(args.dst):
-                existing = cast(list[str], os.listdir(args.dst))
-                if existing and not args.y:
-                    parser.error(
-                        f"Directory '{args.dst}' already exists and is not empty."
-                        " Use -y to overwrite."
-                    )
-            os.makedirs(args.dst, exist_ok=True)
-
-            dataset_dict = adapter.from_hub_to_dataset_dict(args.src)
-
-            for split_name in ("train", "validation", "test"):
-                split_data = dataset_dict[split_name]
-                adapter.from_dataset_to_dat(
-                    dataset=split_data,
-                    dat_filename=os.path.join(args.dst, f"{split_name}.dat")
-                )
-                print(f"✅ {split_name}: {len(split_data)} records")
-
-            print(f"📁 saved to {args.dst}")
-
-        else:
-            parser.error("Unsupported source/destination combination.")
 
     elif args.command == "split":
         out_dir = args.dst or os.path.splitext(os.path.basename(args.src))[0]

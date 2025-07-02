@@ -104,16 +104,25 @@ This enables the `fifo-tool-datasets` command.
 fifo-tool-datasets <command> [options]
 ```
 
-#### `copy`
+#### `upload`
 
-Upload or download datasets between `.dat` files (or directories) and the Hugging Face Hub.
+Upload a local `.dat` file or directory to the Hugging Face Hub.
 
 ```bash
-fifo-tool-datasets copy <src> <dst> --adapter <adapter> [--commit-message <msg>] [--seed <int>] [-y]
+fifo-tool-datasets upload <src> <dst> --adapter <adapter> --commit-message <msg> [--seed <int>]
 ```
 
-- `.dat` or directory → hub: requires `--commit-message`
-- hub → `.dat` or directory: downloads as a file (datasets are merged) or as a directory (each split is preserved)
+The source must be an existing local path and the destination must be in `username/repo` format.
+
+#### `download`
+
+Download a dataset from the Hugging Face Hub.
+
+```bash
+fifo-tool-datasets download <src> <dst> --adapter <adapter> [-y]
+```
+
+The source must be in `username/repo` format. The destination can be a `.dat` file (merged) or a directory (one `.dat` per split).
 
 #### `split`
 
@@ -149,10 +158,10 @@ Currently, only the `dsl` adapter is supported. If the `--adapter` flag is omitt
 
 ```bash
 # Upload
-fifo-tool-datasets copy dsl.dat username/my-dataset --adapter dsl --commit-message "init"
+fifo-tool-datasets upload dsl.dat username/my-dataset --adapter dsl --commit-message "init"
 
 # Download
-fifo-tool-datasets copy username/my-dataset dsl.dat --adapter dsl
+fifo-tool-datasets download username/my-dataset dsl.dat --adapter dsl
 
 # Split
 fifo-tool-datasets split dsl.dat --adapter dsl --to split_dsl
