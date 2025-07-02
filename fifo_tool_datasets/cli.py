@@ -1,7 +1,6 @@
 import argparse
 import os
 import re
-import sys
 from pathlib import Path
 from typing import cast
 # Pylance: suppress missing type stub warning for datasets
@@ -24,13 +23,16 @@ _HF_DATASET_RE = re.compile(r"^[^/]+/[^/]+$")
 
 
 def _is_hf_dataset(name: str) -> bool:
-    """Check whether a string matches the ``username/repo`` pattern.
+    """
+    Check whether a string matches the `username/repo` pattern.
 
     Args:
-        name: The string to validate.
+        name (str):
+            The string to validate.
 
     Returns:
-        ``True`` if ``name`` looks like a Hugging Face dataset identifier.
+        bool:
+            `True` if `name` looks like a Hugging Face dataset identifier.
     """
 
     return bool(_HF_DATASET_RE.match(name))
@@ -39,15 +41,18 @@ def _is_hf_dataset(name: str) -> bool:
 def _handle_upload(
     args: argparse.Namespace, parser: argparse.ArgumentParser, adapter: DatasetAdapter
 ) -> None:
-    """Execute the ``upload`` command.
+    """
+    Execute the `upload` command.
 
     Args:
-        args: Parsed command-line arguments.
-        parser: The argument parser used for error reporting.
-        adapter: Dataset adapter to perform the conversions.
+        args (argparse.Namespace):
+            Parsed command-line arguments.
 
-    Returns:
-        None.
+        parser (argparse.ArgumentParser):
+            The argument parser used for error reporting.
+
+        adapter (DatasetAdapter):
+            Dataset adapter to perform the conversions.
     """
     if os.path.isfile(args.src):
         if not args.src.endswith(".dat"):
@@ -56,6 +61,7 @@ def _handle_upload(
     elif os.path.isdir(args.src):
         src_is_file = False
     else:
+        src_is_file = None
         parser.error(f"upload: source '{args.src}' is not a valid file or directory")
 
     if not _is_hf_dataset(args.dst):
@@ -83,15 +89,18 @@ def _handle_upload(
 def _handle_download(
     args: argparse.Namespace, parser: argparse.ArgumentParser, adapter: DatasetAdapter
 ) -> None:
-    """Execute the ``download`` command.
+    """
+    Execute the `download` command.
 
     Args:
-        args: Parsed command-line arguments.
-        parser: The argument parser used for error reporting.
-        adapter: Dataset adapter to perform the conversions.
+        args (argparse.Namespace):
+            Parsed command-line arguments.
 
-    Returns:
-        None.
+        parser (argparse.ArgumentParser):
+            The argument parser used for error reporting.
+
+        adapter (DatasetAdapter):
+            Dataset adapter to perform the conversions.
     """
     if not _is_hf_dataset(args.src):
         parser.error("download: source must be in 'username/repo' format")
@@ -138,58 +147,58 @@ def main() -> None:
 
     # upload
     upload_parser = subparsers.add_parser(
-        "upload", help="Upload a local .dat file or directory to the Hugging Face Hub"
+        "upload",
+        help="Upload a local .dat file or directory to the Hugging Face Hub"
     )
     upload_parser.add_argument("src", help="Local .dat file or directory")
-    upload_parser.add_argument(
-        "dst",
-        help="Destination dataset on Hugging Face (username/repo)",
-    )
+    upload_parser.add_argument("dst", help="Destination dataset on Hugging Face (username/repo)")
     upload_parser.add_argument("--adapter", choices=ADAPTERS.keys(), required=True)
     upload_parser.add_argument("--commit-message", required=True, help="Commit message for the upload")
     upload_parser.add_argument("--seed", type=int, default=42)
-    upload_parser.add_argument(
-        "--split-ratio",
-        nargs=3,
-        type=float,
-        metavar=("TRAIN", "VAL", "TEST"),
-        default=(0.7, 0.15, 0.15),
-        help="Only used when uploading a single .dat file. Ratios must sum to 1.0",
-    )
+    upload_parser.add_argument("--split-ratio", nargs=3, type=float, metavar=("TRAIN", "VAL", "TEST"),
+                               default=(0.7, 0.15, 0.15),
+                               help="Only used when uploading a single .dat file. Ratios must sum to 1.0")
 
     # download
     download_parser = subparsers.add_parser(
-        "download", help="Download a dataset from the Hugging Face Hub"
+        "download",
+        help="Download a dataset from the Hugging Face Hub"
     )
-    download_parser.add_argument(
-        "src", help="Source dataset on Hugging Face (username/repo)"
-    )
+    download_parser.add_argument("src", help="Source dataset on Hugging Face (username/repo)")
     download_parser.add_argument("dst", help="Destination directory or .dat file")
     download_parser.add_argument("--adapter", choices=ADAPTERS.keys(), required=True)
-    download_parser.add_argument(
-        "-y", action="store_true", help="Overwrite existing local files or directories"
-    )
-
+    download_parser.add_argument("-y", action="store_true",
+                                 help="Overwrite existing local files or directories")
 
     # split
-    split_parser = subparsers.add_parser("split", help="Split a .dat file into train/val/test directory")
+    split_parser = subparsers.add_parser(
+        "split",
+        help="Split a .dat file into train/val/test directory"
+    )
     split_parser.add_argument("src", help="Input .dat file")
     split_parser.add_argument("--to", dest="dst", help="Target directory (default: <basename>/)")
     split_parser.add_argument("--adapter", choices=ADAPTERS.keys(), required=True)
     split_parser.add_argument("--seed", type=int, default=42)
     split_parser.add_argument("--split-ratio", nargs=3, type=float, metavar=('TRAIN', 'VAL', 'TEST'),
-                              default=(0.7, 0.15, 0.15), help="Ratios for train/val/test splits. Must sum to 1.0")
+                              default=(0.7, 0.15, 0.15),
+                              help="Ratios for train/val/test splits. Must sum to 1.0")
     split_parser.add_argument("-y", action="store_true", help="Overwrite existing directory")
 
     # merge
-    merge_parser = subparsers.add_parser("merge", help="Merge split directory back into a .dat file")
+    merge_parser = subparsers.add_parser(
+        "merge",
+        help="Merge split directory back into a .dat file"
+    )
     merge_parser.add_argument("src", help="Input directory with train/val/test .dat files")
     merge_parser.add_argument("--to", dest="dst", help="Output .dat file (default: <dirname>.dat)")
     merge_parser.add_argument("--adapter", choices=ADAPTERS.keys(), required=True)
     merge_parser.add_argument("-y", action="store_true", help="Overwrite existing .dat file")
 
     # sort
-    sort_parser = subparsers.add_parser("sort", help="Sort DSL .dat files by system prompt")
+    sort_parser = subparsers.add_parser(
+        "sort",
+        help="Sort DSL .dat files by system prompt"
+    )
     sort_parser.add_argument("path", help=".dat file or directory to sort in place")
     sort_parser.add_argument("--adapter", choices=["dsl"], default="dsl")
 
