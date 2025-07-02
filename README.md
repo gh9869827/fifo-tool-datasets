@@ -89,6 +89,10 @@ All datasets uploaded to the Hub — if not already split — are automatically 
 Install both the CLI and SDK in one step:
 
 ```bash
+git clone https://github.com/gh9869827/fifo-tool-datasets.git
+
+cd fifo-tool-datasets
+
 python3 -m pip install -e .
 ```
 
