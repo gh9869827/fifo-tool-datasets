@@ -1,10 +1,12 @@
+from __future__ import annotations
 import argparse
 import os
 import re
 import shutil
 import json
-from datetime import datetime
 from pathlib import Path
+from dataclasses import dataclass
+from datetime import datetime
 from typing import cast
 import huggingface_hub as hub
 # Pylance: suppress missing type stub warning for datasets
@@ -25,6 +27,92 @@ ADAPTERS: dict[str, DatasetAdapter] = {
 
 _HF_DATASET_RE = re.compile(r"^[^/]+/[^/]+$")
 
+@dataclass
+class DatasetMetadata:
+    """
+    Represents metadata associated with a downloaded dataset directory.
+
+    Attributes:
+        adapter (str | None):
+            Name of the adapter (may be None if metadata is missing)
+
+        last_download (str | None):
+            Timestamp of the last download in 'YYYY-MM-DD HH:MM:SS' format, or None if not available
+
+        sha (str | None):
+            Commit SHA of the dataset at the time of download, or None if not available
+    """
+    adapter: str | None
+    last_download: str | None
+    sha: str | None
+
+    @classmethod
+    def from_directory(cls, dir_path: str) -> DatasetMetadata:
+        """
+        Load metadata from a `.hf_meta.json` file in the given directory.
+        If the file does not exist or cannot be parsed, returns a DatasetMetadata
+        object with all fields set to None.
+
+        Args:
+            dir_path (str):
+                Path to the directory containing the `.hf_meta.json` file
+
+        Returns:
+            DatasetMetadata:
+                A metadata object with values from the file or None for missing fields
+        """
+        path = os.path.join(dir_path, ".hf_meta.json")
+        if not os.path.exists(path):
+            return cls(None, None, None)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return cls(
+                adapter=data.get("adapter"),
+                last_download=data.get("last_download"),
+                sha=data.get("sha"),
+            )
+        except (OSError, json.JSONDecodeError):
+            return cls(None, None, None)
+
+    @classmethod
+    def from_values(cls, adapter: str, sha: str) -> DatasetMetadata:
+        """
+        Create a new metadata object using the current timestamp.
+
+        Args:
+            adapter (str):
+                Adapter type (must be a known adapter key)
+
+            sha (str):
+                Commit SHA of the dataset from the Hugging Face Hub
+
+        Returns:
+            DatasetMetadata:
+                A populated metadata object
+        """
+        return cls(
+            adapter=adapter,
+            last_download=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            sha=sha,
+        )
+
+    def save(self, dir_path: str) -> None:
+        """
+        Save this metadata to a `.hf_meta.json` file in the given directory.
+
+        Args:
+            dir_path (str):
+                Target directory where the metadata file will be written
+        """
+        path = os.path.join(dir_path, ".hf_meta.json")
+        data = {
+            "adapter": self.adapter,
+            "last_download": self.last_download,
+            "sha": self.sha,
+        }
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
 
 def _is_hf_dataset(name: str) -> bool:
     """
@@ -107,21 +195,16 @@ def _handle_upload(
             split_ratios=tuple(args.split_ratio),
         )
     else:
-        # Resolve adapter name and metadata for directories
-        meta: dict[str, str] | None = None
-        if not src_is_file:
-            meta_path = os.path.join(args.src, ".hf_meta.json")
-            if os.path.exists(meta_path):
-                with open(meta_path, "r", encoding="utf-8") as f:
-                    meta = json.load(f)
+        meta_data = DatasetMetadata.from_directory(args.src)
 
-        adapter_name = args.adapter or (meta.get("adapter") if meta else None)
+        adapter_name = args.adapter or meta_data.adapter
 
         if adapter_name is None:
             parser.error("--adapter is required or must exist in .hf_meta.json")
+
         adapter = ADAPTERS[adapter_name]
 
-        local_hash = meta.get("sha") if meta else None
+        local_hash = meta_data.sha
         try:
             remote_hash = hub.HfApi().dataset_info(args.dst).sha
         except hub.errors.RepositoryNotFoundError:
@@ -196,16 +279,7 @@ def _handle_download(
         print(f"📄 saved to {args.dst}")
     else:
         if adapter_name is None:
-            try:
-                meta_path = os.path.join(args.dst, ".hf_meta.json")
-                if os.path.exists(meta_path):
-                    with open(meta_path, "r", encoding="utf-8") as f:
-                        previous_meta: dict[str, str] = json.load(f)
-                    adapter_name = previous_meta.get("adapter")
-                else:
-                    adapter_name = None
-            except (OSError, json.JSONDecodeError):
-                adapter_name = None
+            adapter_name = DatasetMetadata.from_directory(args.dst).adapter
 
         if adapter_name is None:
             parser.error("--adapter is required or must exist in .hf_meta.json")
@@ -228,13 +302,7 @@ def _handle_download(
         if info.sha is None:
             raise RuntimeError(f"Unable to retrieve commit SHA for dataset '{args.src}'")
 
-        meta: dict[str, str] = {
-            "adapter": adapter_name,
-            "last_download": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "sha": info.sha,
-        }
-        with open(os.path.join(args.dst, ".hf_meta.json"), "w", encoding="utf-8") as f:
-            json.dump(meta, f, indent=2)
+        DatasetMetadata.from_values(adapter=adapter_name, sha=info.sha).save(args.dst)
 
         for extra in ("README.md", "LICENSE"):
             try:
@@ -272,16 +340,13 @@ def _handle_info(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
         for name in sorted(dat_files):
             count = _count_dat_records(os.path.join(target, name))
             print(f"✅ {os.path.splitext(name)[0]}: {count} records")
-        meta_path = os.path.join(target, ".hf_meta.json")
-        if os.path.exists(meta_path):
-            with open(meta_path, "r", encoding="utf-8") as f:
-                meta = json.load(f)
-            if meta.get("adapter"):
-                print(f"🧩 adapter: {meta['adapter']}")
-            if meta.get("last_download"):
-                print(f"📥 last_download: {meta['last_download']} (local time)")
-            if meta.get("sha"):
-                print(f"🔐 sha: {meta['sha']}")
+        meta_data = DatasetMetadata.from_directory(target)
+        if meta_data.adapter:
+            print(f"🧩 adapter: {meta_data.adapter}")
+        if meta_data.last_download:
+            print(f"📥 last_download: {meta_data.last_download} (local time)")
+        if meta_data.sha:
+            print(f"🔐 sha: {meta_data.sha}")
     else:
         parser.error(f"info: '{target}' is not a valid path")
 
