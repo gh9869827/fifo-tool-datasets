@@ -251,7 +251,6 @@ def _handle_download(
 
         parser (argparse.ArgumentParser):
             The argument parser used for error reporting.
-
     """
     if not _is_hf_dataset(args.src):
         parser.error("download: source must be in 'username/repo' format")
@@ -333,7 +332,16 @@ def _handle_download(
 
 
 def _handle_push(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    """Upload a dataset directory using metadata from `.hf_meta.json`."""
+    """
+    Upload a dataset directory using metadata from `.hf_meta.json`.
+
+    Args:
+        args (argparse.Namespace):
+            Parsed command-line arguments.
+
+        parser (argparse.ArgumentParser):
+            The argument parser used for error reporting.
+    """
     dir_path = args.dir
     if not os.path.isdir(dir_path):
         parser.error(f"push: directory '{dir_path}' does not exist")
@@ -350,29 +358,39 @@ def _handle_push(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
         commit_message=args.commit_message,
         seed=42,
         split_ratio=(0.7, 0.15, 0.15),
-        y=args.y,
+        y=args.y
     )
 
     _handle_upload(new_args, parser)
 
 
 def _handle_pull(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    """Download a dataset using metadata from `.hf_meta.json`."""
+    """
+    Download a dataset using metadata from `.hf_meta.json`.
+
+    Args:
+        args (argparse.Namespace):
+            Parsed command-line arguments.
+
+        parser (argparse.ArgumentParser):
+            The argument parser used for error reporting.
+    """
     dir_path = args.dir
+    if not os.path.isdir(dir_path):
+        parser.error(f"push: directory '{dir_path}' does not exist")
+
     meta = DatasetMetadata.from_directory(dir_path)
 
-    repo_id = meta.repo_id
-    if repo_id is None:
-        parser.error("pull: .hf_meta.json is missing 'repo_id'")
-
-    adapter_name = args.adapter or meta.adapter
+    if meta.repo_id is None or meta.adapter is None:
+        parser.error("pull: .hf_meta.json must contain 'repo_id' and 'adapter'")
 
     new_args = argparse.Namespace(
-        src=repo_id,
+        src=meta.repo_id,
         dst=dir_path,
-        adapter=adapter_name,
-        y=args.y,
+        adapter=meta.adapter,
+        y=True # Overwrite is always implied for pull
     )
+
     _handle_download(new_args, parser)
 
 
@@ -454,9 +472,6 @@ def main() -> None:
         help="Download a dataset using .hf_meta.json",
     )
     pull_parser.add_argument("dir", nargs="?", default=".", help="Target directory (default: .)")
-    pull_parser.add_argument("--adapter", choices=ADAPTERS.keys())
-    pull_parser.add_argument("-y", action="store_true",
-                             help="Overwrite existing local files or directories")
 
     # split
     split_parser = subparsers.add_parser(
@@ -467,8 +482,8 @@ def main() -> None:
     split_parser.add_argument("--to", dest="dst", help="Target directory (default: <basename>/)")
     split_parser.add_argument("--adapter", choices=ADAPTERS.keys(), required=True)
     split_parser.add_argument("--seed", type=int, default=42)
-    split_parser.add_argument("--split-ratio", nargs=3, type=float, metavar=('TRAIN', 'VAL', 'TEST'),
-                              default=(0.7, 0.15, 0.15),
+    split_parser.add_argument("--split-ratio", nargs=3, type=float,
+                              metavar=('TRAIN', 'VAL', 'TEST'), default=(0.7, 0.15, 0.15),
                               help="Ratios for train/val/test splits. Must sum to 1.0")
     split_parser.add_argument("-y", action="store_true", help="Overwrite existing directory")
 

@@ -134,15 +134,15 @@ The source must be in `username/repo` format. The destination can be a `.dat` fi
 fifo-tool-datasets push [<dir>] --commit-message <msg> [-y]
 ```
 
-Push the dataset directory to the repo specified in `.hf_meta.json`. Defaults to the current directory.
+Push the dataset from the specified directory to the Hub using the `repo_id` and `adapter` from `.hf_meta.json`. Defaults to the current directory.
 
 #### `pull`
 
 ```bash
-fifo-tool-datasets pull [<dir>] [--adapter <adapter>] [-y]
+fifo-tool-datasets pull [<dir>]
 ```
 
-Download the dataset referenced by `.hf_meta.json`. Defaults to the current directory. The adapter is read from the metadata unless overridden.
+Pull the dataset into the specified directory using the `repo_id` and `adapter` from `.hf_meta.json`. Defaults to the current directory.
 
 #### `split`
 
