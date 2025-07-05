@@ -1,8 +1,10 @@
 import argparse
 import os
 import re
+import shutil
 from pathlib import Path
 from typing import cast
+from huggingface_hub import HfApi, hf_hub_download
 # Pylance: suppress missing type stub warning for datasets
 from datasets import (  # type: ignore
     concatenate_datasets,
@@ -79,6 +81,17 @@ def _handle_upload(
             split_ratios=tuple(args.split_ratio),
         )
     else:
+        local_hash = None
+        hash_path = os.path.join(args.src, ".hf_hash")
+        if os.path.exists(hash_path):
+            with open(hash_path, "r", encoding="utf-8") as f:
+                local_hash = f.read().strip()
+        try:
+            remote_hash = HfApi().dataset_info(args.dst).sha
+        except Exception:
+            remote_hash = None
+        if local_hash and remote_hash and local_hash != remote_hash and not args.y:
+            parser.error("Remote dataset has changed. Use -y to overwrite.")
         adapter.from_dir_to_hub(
             dat_dir=args.src,
             hub_dataset=args.dst,
@@ -139,6 +152,17 @@ def _handle_download(
             )
             print(f"✅ {split_name}: {len(split_data)} records")
 
+        api = HfApi()
+        info = api.dataset_info(args.src)
+        with open(os.path.join(args.dst, ".hf_hash"), "w", encoding="utf-8") as f:
+            f.write(info.sha)
+        for extra in ("README.md", "LICENSE"):
+            try:
+                path = hf_hub_download(args.src, filename=extra, repo_type="dataset", revision=info.sha)
+            except Exception:
+                continue
+            shutil.copy(path, os.path.join(args.dst, extra))
+
         print(f"📁 saved to {args.dst}")
 
 def main() -> None:
@@ -158,6 +182,7 @@ def main() -> None:
     upload_parser.add_argument("--split-ratio", nargs=3, type=float, metavar=("TRAIN", "VAL", "TEST"),
                                default=(0.7, 0.15, 0.15),
                                help="Only used when uploading a single .dat file. Ratios must sum to 1.0")
+    upload_parser.add_argument("-y", action="store_true", help="Overwrite remote changes")
 
     # download
     download_parser = subparsers.add_parser(

@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import os
 from typing import Iterator, TypedDict, cast
+from huggingface_hub import HfApi, hf_hub_download
 # Pylance: suppress missing type stub warning for datasets
 from datasets import (  # type: ignore
     Dataset,
@@ -232,25 +233,48 @@ class DatasetAdapter(ABC):
             raise ValueError("Commit message is required")
 
         expected_files = {"train.dat", "validation.dat", "test.dat"}
+        optional_files = {"README.md", "LICENSE"}
         actual_files = set(os.listdir(dat_dir))
 
-        # Must match exactly
-        if actual_files != expected_files:
+        if not expected_files.issubset(actual_files):
             missing = expected_files - actual_files
-            extras = actual_files - expected_files
-            parts: list[str] = []
-            if missing:
-                parts.append(f"missing required files: {', '.join(sorted(missing))}")
-            if extras:
-                parts.append(f"unsupported files present: {', '.join(sorted(extras))}")
-            raise ValueError("Directory must contain exactly train.dat, validation.dat,"
-                             " and test.dat — " + "; ".join(parts))
+            raise ValueError(
+                "Directory must contain train.dat, validation.dat, and test.dat — "
+                f"missing required files: {', '.join(sorted(missing))}"
+            )
+
+        extras = {f for f in actual_files - expected_files - optional_files if not f.startswith('.')}
+        if extras:
+            raise ValueError(
+                "Directory contains unsupported files: " + ", ".join(sorted(extras))
+            )
 
         splits = {}
         for split_name in ("train", "validation", "test"):
             dat_path = os.path.join(dat_dir, f"{split_name}.dat")
             ds = self.from_dat_to_wide_dataset(dat_path)
             splits[split_name] = ds
+
+        api = HfApi()
+        for extra in ("README.md", "LICENSE"):
+            local_path = os.path.join(dat_dir, extra)
+            if os.path.exists(local_path):
+                try:
+                    remote_path = hf_hub_download(hub_dataset, filename=extra, repo_type="dataset")
+                    with open(remote_path, "rb") as f:
+                        remote_content = f.read()
+                except Exception:
+                    remote_content = None
+                with open(local_path, "rb") as f:
+                    local_content = f.read()
+                if remote_content != local_content:
+                    api.upload_file(
+                        path_or_fileobj=local_path,
+                        path_in_repo=extra,
+                        repo_id=hub_dataset,
+                        repo_type="dataset",
+                        commit_message=commit_message,
+                    )
 
         # Pylance: Type of push_to_hub() is partially unknown
         DatasetDict(splits).push_to_hub(  # type: ignore[reportUnknownMemberType]
