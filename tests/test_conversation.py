@@ -278,11 +278,16 @@ def test_from_dat_to_hub_invalid_splits(mock_push: MagicMock, split_ratios: tupl
         ("data_dir_01", None, True, ValueError),  # Valid directory but missing commit message
         ("data_dir_broken_01", "test commit message", True, ValueError),
         ("data_dir_broken_02", "test commit message", True, ValueError),
+        ("data_dir_docs", "test commit message", False, None),
     ]
 )
+@patch("huggingface_hub.hf_hub_download")
+@patch("huggingface_hub.HfApi.upload_file")
 @patch("datasets.DatasetDict.push_to_hub")
 def test_from_dir_to_hub_parametrized(
     mock_push: MagicMock,
+    mock_upload: MagicMock,
+    mock_download: MagicMock,
     directory: str,
     commit_message: str,
     should_fail: bool,
@@ -301,6 +306,8 @@ def test_from_dir_to_hub_parametrized(
             )
         assert not mock_push.called
     else:
+        if directory == "data_dir_docs":
+            mock_download.side_effect = FileNotFoundError
         adapter.from_dir_to_hub(
             dat_dir=str(fixtures_dir),
             hub_dataset="dummy-user/dummy-dataset",
@@ -310,6 +317,8 @@ def test_from_dir_to_hub_parametrized(
             'dummy-user/dummy-dataset',
             commit_message=commit_message
         )
+        if directory == "data_dir_docs":
+            assert mock_upload.call_count == 2
 
 def sort_conversations(
         data: list[StructuredConversationRecord]
