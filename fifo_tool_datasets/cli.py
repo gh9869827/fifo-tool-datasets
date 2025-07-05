@@ -36,13 +36,18 @@ class DatasetMetadata:
         adapter (str | None):
             Name of the adapter (may be None if metadata is missing)
 
+        repo_id (str | None):
+            Dataset repository ID on the Hugging Face Hub, or None if not available
+
         last_download (str | None):
             Timestamp of the last download in 'YYYY-MM-DD HH:MM:SS' format, or None if not available
 
         sha (str | None):
             Commit SHA of the dataset at the time of download, or None if not available
     """
+
     adapter: str | None
+    repo_id: str | None
     last_download: str | None
     sha: str | None
 
@@ -63,20 +68,21 @@ class DatasetMetadata:
         """
         path = os.path.join(dir_path, ".hf_meta.json")
         if not os.path.exists(path):
-            return cls(None, None, None)
+            return cls(None, None, None, None)
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return cls(
                 adapter=data.get("adapter"),
+                repo_id=data.get("repo_id"),
                 last_download=data.get("last_download"),
                 sha=data.get("sha"),
             )
         except (OSError, json.JSONDecodeError):
-            return cls(None, None, None)
+            return cls(None, None, None, None)
 
     @classmethod
-    def from_values(cls, adapter: str, sha: str) -> DatasetMetadata:
+    def from_values(cls, adapter: str, sha: str, repo_id: str) -> DatasetMetadata:
         """
         Create a new metadata object using the current timestamp.
 
@@ -87,12 +93,16 @@ class DatasetMetadata:
             sha (str):
                 Commit SHA of the dataset from the Hugging Face Hub
 
+            repo_id (str):
+                Dataset repository ID on the Hugging Face Hub
+
         Returns:
             DatasetMetadata:
                 A populated metadata object
         """
         return cls(
             adapter=adapter,
+            repo_id=repo_id,
             last_download=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             sha=sha,
         )
@@ -108,6 +118,7 @@ class DatasetMetadata:
         path = os.path.join(dir_path, ".hf_meta.json")
         data = {
             "adapter": self.adapter,
+            "repo_id": self.repo_id,
             "last_download": self.last_download,
             "sha": self.sha,
         }
@@ -302,7 +313,11 @@ def _handle_download(
         if info.sha is None:
             raise RuntimeError(f"Unable to retrieve commit SHA for dataset '{args.src}'")
 
-        DatasetMetadata.from_values(adapter=adapter_name, sha=info.sha).save(args.dst)
+        DatasetMetadata.from_values(
+            adapter=adapter_name,
+            sha=info.sha,
+            repo_id=args.src,
+        ).save(args.dst)
 
         for extra in ("README.md", "LICENSE"):
             try:
@@ -315,6 +330,50 @@ def _handle_download(
             shutil.copy(path, os.path.join(args.dst, extra))
 
         print(f"📁 saved to {args.dst}")
+
+
+def _handle_push(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Upload a dataset directory using metadata from `.hf_meta.json`."""
+    dir_path = args.dir
+    if not os.path.isdir(dir_path):
+        parser.error(f"push: directory '{dir_path}' does not exist")
+
+    meta = DatasetMetadata.from_directory(dir_path)
+
+    if meta.repo_id is None or meta.adapter is None:
+        parser.error("push: .hf_meta.json must contain 'repo_id' and 'adapter'")
+
+    new_args = argparse.Namespace(
+        src=dir_path,
+        dst=meta.repo_id,
+        adapter=meta.adapter,
+        commit_message=args.commit_message,
+        seed=42,
+        split_ratio=(0.7, 0.15, 0.15),
+        y=args.y,
+    )
+
+    _handle_upload(new_args, parser)
+
+
+def _handle_pull(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Download a dataset using metadata from `.hf_meta.json`."""
+    dir_path = args.dir
+    meta = DatasetMetadata.from_directory(dir_path)
+
+    repo_id = meta.repo_id
+    if repo_id is None:
+        parser.error("pull: .hf_meta.json is missing 'repo_id'")
+
+    adapter_name = args.adapter or meta.adapter
+
+    new_args = argparse.Namespace(
+        src=repo_id,
+        dst=dir_path,
+        adapter=adapter_name,
+        y=args.y,
+    )
+    _handle_download(new_args, parser)
 
 
 def _handle_info(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
@@ -380,6 +439,25 @@ def main() -> None:
     download_parser.add_argument("-y", action="store_true",
                                  help="Overwrite existing local files or directories")
 
+    # push
+    push_parser = subparsers.add_parser(
+        "push",
+        help="Upload a dataset directory using .hf_meta.json",
+    )
+    push_parser.add_argument("dir", nargs="?", default=".", help="Dataset directory (default: .)")
+    push_parser.add_argument("--commit-message", required=True, help="Commit message for the upload")
+    push_parser.add_argument("-y", action="store_true", help="Overwrite remote changes")
+
+    # pull
+    pull_parser = subparsers.add_parser(
+        "pull",
+        help="Download a dataset using .hf_meta.json",
+    )
+    pull_parser.add_argument("dir", nargs="?", default=".", help="Target directory (default: .)")
+    pull_parser.add_argument("--adapter", choices=ADAPTERS.keys())
+    pull_parser.add_argument("-y", action="store_true",
+                             help="Overwrite existing local files or directories")
+
     # split
     split_parser = subparsers.add_parser(
         "split",
@@ -426,6 +504,12 @@ def main() -> None:
 
     elif args.command == "download":
         _handle_download(args, parser)
+
+    elif args.command == "push":
+        _handle_push(args, parser)
+
+    elif args.command == "pull":
+        _handle_pull(args, parser)
 
     elif args.command == "split":
         out_dir = args.dst or os.path.splitext(os.path.basename(args.src))[0]

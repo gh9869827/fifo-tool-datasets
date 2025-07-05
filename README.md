@@ -128,6 +128,22 @@ fifo-tool-datasets download <src> <dst> [--adapter <adapter>] [-y]
 
 The source must be in `username/repo` format. The destination can be a `.dat` file (merged) or a directory (one `.dat` per split). When downloading to a directory and `--adapter` is omitted, the CLI tries to read the adapter from the local `.hf_meta.json` file (if present from a previous download).
 
+#### `push`
+
+```bash
+fifo-tool-datasets push [<dir>] --commit-message <msg> [-y]
+```
+
+Push the dataset directory to the repo specified in `.hf_meta.json`. Defaults to the current directory.
+
+#### `pull`
+
+```bash
+fifo-tool-datasets pull [<dir>] [--adapter <adapter>] [-y]
+```
+
+Download the dataset referenced by `.hf_meta.json`. Defaults to the current directory. The adapter is read from the metadata unless overridden.
+
 #### `split`
 
 ```bash
@@ -170,7 +186,7 @@ When using `upload` or `download` with a **directory source or target**, the CLI
 
 - Upload `README.md` and `LICENSE` files from the source directory if they exist
 - Download `README.md` and `LICENSE` files from the Hub if they are present in the remote repository
-- Create a `.hf_meta.json` file when downloading, storing the adapter, download timestamp, and commit hash
+- Create a `.hf_meta.json` file when downloading, storing the adapter, repo ID, download timestamp, and commit hash
 - Use that metadata to verify the remote commit before upload
 - Auto-detect the adapter on download if `--adapter` isn't provided
 - Block uploads if the remote has changed since download, unless `-y` is passed to override
@@ -193,6 +209,12 @@ fifo-tool-datasets download username/my-dataset ./dsl_dir
 
 # Download (explicit adapter override)
 fifo-tool-datasets download username/my-dataset ./dsl_dir --adapter dsl
+
+# Push updated data
+fifo-tool-datasets push ./dsl_dir --commit-message "update"
+
+# Pull latest version
+fifo-tool-datasets pull ./dsl_dir
 
 # Split
 fifo-tool-datasets split dsl.dat --adapter dsl --to split_dsl
