@@ -432,6 +432,8 @@ def _handle_info(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
             count = _count_dat_records(os.path.join(target, name))
             print(f"✅ {os.path.splitext(name)[0]}: {count} records")
         meta_data = DatasetMetadata.from_directory(target)
+        if meta_data.repo_id:
+            print(f"🌐 repository: {meta_data.repo_id}")
         if meta_data.adapter:
             print(f"🧩 adapter: {meta_data.adapter}")
         if meta_data.last_download:
