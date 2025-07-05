@@ -123,10 +123,10 @@ The source must be an existing local path and the destination must be in `userna
 Download a dataset from the Hugging Face Hub.
 
 ```bash
-fifo-tool-datasets download <src> <dst> --adapter <adapter> [-y]
+fifo-tool-datasets download <src> <dst> [--adapter <adapter>] [-y]
 ```
 
-The source must be in `username/repo` format. The destination can be a `.dat` file (merged) or a directory (one `.dat` per split).
+The source must be in `username/repo` format. The destination can be a `.dat` file (merged) or a directory (one `.dat` per split). When downloading to a directory and `--adapter` is omitted, the CLI tries to read the adapter from `.hf_meta.json` in the remote repo.
 
 #### `split`
 
@@ -172,6 +172,7 @@ When using `upload` or `download` with a **directory source or target**, the CLI
 - Download `README.md` and `LICENSE` files from the Hub if they are present in the remote repository
 - Create a `.hf_meta.json` file when downloading, storing the adapter, download timestamp, and commit hash
 - Use that metadata to verify the remote commit before upload
+- Auto-detect the adapter on download if `--adapter` isn't provided
 - Block uploads if the remote has changed since download, unless `-y` is passed to override
 - Diff local vs. remote documentation files and skip upload if content has not changed
 
@@ -187,8 +188,11 @@ This ensures smooth syncing of documentation while minimizing the risk of overwr
 # Upload
 fifo-tool-datasets upload dsl.dat username/my-dataset --adapter dsl --commit-message "init"
 
-# Download
-fifo-tool-datasets download username/my-dataset dsl.dat --adapter dsl
+# Download (auto-detected adapter)
+fifo-tool-datasets download username/my-dataset ./dsl_dir
+
+# Explicit adapter override
+fifo-tool-datasets download username/my-dataset ./dsl_dir --adapter dsl
 
 # Split
 fifo-tool-datasets split dsl.dat --adapter dsl --to split_dsl
