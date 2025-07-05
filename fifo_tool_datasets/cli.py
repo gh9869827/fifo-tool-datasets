@@ -2,6 +2,8 @@ import argparse
 import os
 import re
 import shutil
+import json
+from datetime import datetime
 from pathlib import Path
 from typing import cast
 import huggingface_hub as hub
@@ -40,8 +42,27 @@ def _is_hf_dataset(name: str) -> bool:
     return bool(_HF_DATASET_RE.match(name))
 
 
+def _count_dat_records(dat_path: str) -> int:
+    """Return the number of records in a `.dat` file.
+
+    Args:
+        dat_path (str):
+            Path to the `.dat` file whose records should be counted.
+
+    Returns:
+        int:
+            Number of records found in the file.
+    """
+    count = 0
+    with open(dat_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip() == "---":
+                count += 1
+    return max(count - 1, 0)
+
+
 def _handle_upload(
-    args: argparse.Namespace, parser: argparse.ArgumentParser, adapter: DatasetAdapter
+    args: argparse.Namespace, parser: argparse.ArgumentParser
 ) -> None:
     """
     Execute the `upload` command.
@@ -53,8 +74,8 @@ def _handle_upload(
         parser (argparse.ArgumentParser):
             The argument parser used for error reporting.
 
-        adapter (DatasetAdapter):
-            Dataset adapter to perform the conversions.
+        The adapter is resolved either from the CLI flag or from `.hf_meta.json`
+        if uploading a directory.
     """
     if os.path.isfile(args.src):
         if not args.src.endswith(".dat"):
@@ -72,6 +93,18 @@ def _handle_upload(
     if not args.commit_message:
         parser.error("--commit-message is required when uploading to Hugging Face")
 
+    # Resolve adapter name and metadata for directories
+    meta: dict | None = None
+    if not src_is_file:
+        meta_path = os.path.join(args.src, ".hf_meta.json")
+        if os.path.exists(meta_path):
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+    adapter_name = args.adapter or (meta.get("adapter") if meta else None)
+    if adapter_name is None:
+        parser.error("--adapter is required or must exist in .hf_meta.json")
+    adapter = ADAPTERS[adapter_name]
+
     if src_is_file:
         adapter.from_dat_to_hub(
             dat_filename=args.src,
@@ -81,11 +114,7 @@ def _handle_upload(
             split_ratios=tuple(args.split_ratio),
         )
     else:
-        local_hash = None
-        hash_path = os.path.join(args.src, ".hf_hash")
-        if os.path.exists(hash_path):
-            with open(hash_path, "r", encoding="utf-8") as f:
-                local_hash = f.read().strip()
+        local_hash = meta.get("sha") if meta else None
         try:
             remote_hash = hub.HfApi().dataset_info(args.dst).sha
         except hub.errors.RepositoryNotFoundError:
@@ -158,8 +187,13 @@ def _handle_download(
         if info.sha is None:
             raise RuntimeError(f"Unable to retrieve commit SHA for dataset '{args.src}'")
 
-        with open(os.path.join(args.dst, ".hf_hash"), "w", encoding="utf-8") as f:
-            f.write(info.sha)
+        meta = {
+            "adapter": args.adapter,
+            "last_download": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "sha": info.sha,
+        }
+        with open(os.path.join(args.dst, ".hf_meta.json"), "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2)
 
         for extra in ("README.md", "LICENSE"):
             try:
@@ -173,6 +207,43 @@ def _handle_download(
 
         print(f"📁 saved to {args.dst}")
 
+
+def _handle_info(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Display record counts and metadata for a file or directory.
+
+    Args:
+        args (argparse.Namespace):
+            Parsed command-line arguments.
+
+        parser (argparse.ArgumentParser):
+            The argument parser used for error reporting.
+    """
+    target = args.target
+    if os.path.isfile(target):
+        if not target.endswith(".dat"):
+            parser.error("info: file must end with '.dat'")
+        count = _count_dat_records(target)
+        print(f"✅ {os.path.basename(target)}: {count} records")
+    elif os.path.isdir(target):
+        dat_files = [f for f in os.listdir(target) if f.endswith(".dat")]
+        if not dat_files:
+            parser.error("info: directory contains no .dat files")
+        for name in sorted(dat_files):
+            count = _count_dat_records(os.path.join(target, name))
+            print(f"✅ {os.path.splitext(name)[0]}: {count} records")
+        meta_path = os.path.join(target, ".hf_meta.json")
+        if os.path.exists(meta_path):
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            if meta.get("adapter"):
+                print(f"🧩 adapter: {meta['adapter']}")
+            if meta.get("last_download"):
+                print(f"📥 last_download: {meta['last_download']} (local time)")
+            if meta.get("sha"):
+                print(f"🔐 sha: {meta['sha']}")
+    else:
+        parser.error(f"info: '{target}' is not a valid path")
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="fifo-tool-datasets CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -184,7 +255,7 @@ def main() -> None:
     )
     upload_parser.add_argument("src", help="Local .dat file or directory")
     upload_parser.add_argument("dst", help="Destination dataset on Hugging Face (username/repo)")
-    upload_parser.add_argument("--adapter", choices=ADAPTERS.keys(), required=True)
+    upload_parser.add_argument("--adapter", choices=ADAPTERS.keys())
     upload_parser.add_argument("--commit-message", required=True, help="Commit message for the upload")
     upload_parser.add_argument("--seed", type=int, default=42)
     upload_parser.add_argument("--split-ratio", nargs=3, type=float, metavar=("TRAIN", "VAL", "TEST"),
@@ -235,13 +306,20 @@ def main() -> None:
     sort_parser.add_argument("path", help=".dat file or directory to sort in place")
     sort_parser.add_argument("--adapter", choices=["dsl"], default="dsl")
 
+    # info
+    info_parser = subparsers.add_parser(
+        "info",
+        help="Show record counts and metadata for a file or directory",
+    )
+    info_parser.add_argument("target", help=".dat file or directory")
+
     args = parser.parse_args()
-    adapter = ADAPTERS[args.adapter]
 
     if args.command == "upload":
-        _handle_upload(args, parser, adapter)
+        _handle_upload(args, parser)
 
     elif args.command == "download":
+        adapter = ADAPTERS[args.adapter]
         _handle_download(args, parser, adapter)
 
 
@@ -257,6 +335,7 @@ def main() -> None:
 
         train_ratio, val_ratio, test_ratio = args.split_ratio
 
+        adapter = ADAPTERS[args.adapter]
         try:
             splits = cast(dict[str, Dataset], adapter.from_dat_to_dataset_dict(
                 dat_filename=args.src,
@@ -284,6 +363,7 @@ def main() -> None:
                 "Expected a directory containing split .dat files."
             )
 
+        adapter = ADAPTERS[args.adapter]
         out_file = args.dst or f"{os.path.basename(os.path.normpath(args.src))}.dat"
 
         if os.path.exists(out_file) and not args.y:
@@ -309,6 +389,7 @@ def main() -> None:
         print(f"📅 total: {total_records} records")
 
     elif args.command == "sort":
+        adapter = ADAPTERS[args.adapter]
         if not isinstance(adapter, DSLAdapter):
             parser.error("The sort command currently supports only the 'dsl' adapter.")
 
@@ -325,6 +406,8 @@ def main() -> None:
             print(f"✅ sorted {target}")
         else:
             parser.error(f"Path '{target}' does not exist")
+    elif args.command == "info":
+        _handle_info(args, parser)
 
 if __name__ == "__main__":
     main()

@@ -113,10 +113,10 @@ fifo-tool-datasets <command> [options]
 Upload a local `.dat` file or directory to the Hugging Face Hub.
 
 ```bash
-fifo-tool-datasets upload <src> <dst> --adapter <adapter> --commit-message <msg> [--seed <int>]
+fifo-tool-datasets upload <src> <dst> [--adapter <adapter>] --commit-message <msg> [--seed <int>]
 ```
 
-The source must be an existing local path and the destination must be in `username/repo` format.
+The source must be an existing local path and the destination must be in `username/repo` format. If `--adapter` is omitted when uploading a directory, it is read from `.hf_meta.json`.
 
 #### `download`
 
@@ -156,14 +156,23 @@ fifo-tool-datasets sort <path> [--adapter dsl]
 
 Currently, only the `dsl` adapter is supported. If the `--adapter` flag is omitted, it defaults to `dsl` automatically.
 
+#### `info`
+
+Show record counts and metadata for a `.dat` file or split directory.
+
+```bash
+fifo-tool-datasets info <path>
+```
+
 ### 🔄 Documentation and Metadata Sync
 
 When using `upload` or `download` with a **directory source or target**, the CLI automatically:
 
-- Upload `README.md` and `LICENSE` files from the source directory if they exist  
-- Download `README.md` and `LICENSE` files from the Hub if they are present in the remote repository  
-- Cache the latest commit hash at download time (`.hf_hash`) and verify it before upload  
-- Block uploads if the remote has changed since download, unless `-y` is passed to override  
+- Upload `README.md` and `LICENSE` files from the source directory if they exist
+- Download `README.md` and `LICENSE` files from the Hub if they are present in the remote repository
+- Create a `.hf_meta.json` file when downloading, storing the adapter, download timestamp, and commit hash
+- Use that metadata to verify the remote commit before upload
+- Block uploads if the remote has changed since download, unless `-y` is passed to override
 - Diff local vs. remote documentation files and skip upload if content has not changed
 
 This ensures smooth syncing of documentation while minimizing the risk of overwriting others' changes.
@@ -189,6 +198,9 @@ fifo-tool-datasets merge split_dsl --adapter dsl --to full.dsl.dat
 
 # Sort
 fifo-tool-datasets sort dsl.dat --adapter dsl
+
+# Info
+fifo-tool-datasets info split_dsl
 ```
 
 ---
