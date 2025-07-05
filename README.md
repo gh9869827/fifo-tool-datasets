@@ -126,7 +126,7 @@ Download a dataset from the Hugging Face Hub.
 fifo-tool-datasets download <src> <dst> [--adapter <adapter>] [-y]
 ```
 
-The source must be in `username/repo` format. The destination can be a `.dat` file (merged) or a directory (one `.dat` per split). When downloading to a directory and `--adapter` is omitted, the CLI tries to read the adapter from `.hf_meta.json` in the remote repo.
+The source must be in `username/repo` format. The destination can be a `.dat` file (merged) or a directory (one `.dat` per split). When downloading to a directory and `--adapter` is omitted, the CLI tries to read the adapter from the local `.hf_meta.json` file (if present from a previous download).
 
 #### `split`
 
@@ -191,7 +191,7 @@ fifo-tool-datasets upload dsl.dat username/my-dataset --adapter dsl --commit-mes
 # Download (auto-detected adapter)
 fifo-tool-datasets download username/my-dataset ./dsl_dir
 
-# Explicit adapter override
+# Download (explicit adapter override)
 fifo-tool-datasets download username/my-dataset ./dsl_dir --adapter dsl
 
 # Split
