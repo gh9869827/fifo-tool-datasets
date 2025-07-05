@@ -145,7 +145,8 @@ def _handle_upload(
 
 
 def _handle_download(
-    args: argparse.Namespace, parser: argparse.ArgumentParser, adapter: DatasetAdapter
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
 ) -> None:
     """
     Execute the `download` command.
@@ -157,8 +158,6 @@ def _handle_download(
         parser (argparse.ArgumentParser):
             The argument parser used for error reporting.
 
-        adapter (DatasetAdapter):
-            Dataset adapter to perform the conversions.
     """
     if not _is_hf_dataset(args.src):
         parser.error("download: source must be in 'username/repo' format")
@@ -176,6 +175,24 @@ def _handle_download(
                     f"Directory '{args.dst}' already exists and is not empty. Use -y to overwrite."
                 )
         os.makedirs(args.dst, exist_ok=True)
+
+    adapter_name = args.adapter
+
+    if adapter_name is None:
+        try:
+            meta_path = hub.hf_hub_download(
+                args.src, filename=".hf_meta.json", repo_type="dataset"
+            )
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            adapter_name = cast(str | None, meta.get("adapter"))
+        except Exception:
+            adapter_name = None
+
+    if adapter_name is None:
+        parser.error("--adapter is required or must exist in .hf_meta.json")
+
+    adapter = ADAPTERS[adapter_name]
 
     dataset_dict = adapter.from_hub_to_dataset_dict(args.src)
 
@@ -204,7 +221,7 @@ def _handle_download(
             raise RuntimeError(f"Unable to retrieve commit SHA for dataset '{args.src}'")
 
         meta: dict[str, str] = {
-            "adapter": args.adapter,
+            "adapter": adapter_name,
             "last_download": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "sha": info.sha,
         }
@@ -286,7 +303,7 @@ def main() -> None:
     )
     download_parser.add_argument("src", help="Source dataset on Hugging Face (username/repo)")
     download_parser.add_argument("dst", help="Destination directory or .dat file")
-    download_parser.add_argument("--adapter", choices=ADAPTERS.keys(), required=True)
+    download_parser.add_argument("--adapter", choices=ADAPTERS.keys())
     download_parser.add_argument("-y", action="store_true",
                                  help="Overwrite existing local files or directories")
 
@@ -335,8 +352,7 @@ def main() -> None:
         _handle_upload(args, parser)
 
     elif args.command == "download":
-        adapter = ADAPTERS[args.adapter]
-        _handle_download(args, parser, adapter)
+        _handle_download(args, parser)
 
     elif args.command == "split":
         out_dir = args.dst or os.path.splitext(os.path.basename(args.src))[0]
