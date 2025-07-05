@@ -43,7 +43,8 @@ def _is_hf_dataset(name: str) -> bool:
 
 
 def _count_dat_records(dat_path: str) -> int:
-    """Return the number of records in a `.dat` file.
+    """
+    Return the number of records in a `.dat` file.
 
     Args:
         dat_path (str):
@@ -74,8 +75,8 @@ def _handle_upload(
         parser (argparse.ArgumentParser):
             The argument parser used for error reporting.
 
-        The adapter is resolved either from the CLI flag or from `.hf_meta.json`
-        if uploading a directory.
+    The adapter is resolved either from the CLI flag or from `.hf_meta.json`
+    if uploading a directory.
     """
     if os.path.isfile(args.src):
         if not args.src.endswith(".dat"):
@@ -93,19 +94,11 @@ def _handle_upload(
     if not args.commit_message:
         parser.error("--commit-message is required when uploading to Hugging Face")
 
-    # Resolve adapter name and metadata for directories
-    meta: dict | None = None
-    if not src_is_file:
-        meta_path = os.path.join(args.src, ".hf_meta.json")
-        if os.path.exists(meta_path):
-            with open(meta_path, "r", encoding="utf-8") as f:
-                meta = json.load(f)
-    adapter_name = args.adapter or (meta.get("adapter") if meta else None)
-    if adapter_name is None:
-        parser.error("--adapter is required or must exist in .hf_meta.json")
-    adapter = ADAPTERS[adapter_name]
-
     if src_is_file:
+        if args.adapter is None:
+            parser.error("--adapter is required when uploading a single `.dat` file")
+        adapter = ADAPTERS[args.adapter]
+
         adapter.from_dat_to_hub(
             dat_filename=args.src,
             hub_dataset=args.dst,
@@ -114,11 +107,26 @@ def _handle_upload(
             split_ratios=tuple(args.split_ratio),
         )
     else:
+        # Resolve adapter name and metadata for directories
+        meta: dict[str, str] | None = None
+        if not src_is_file:
+            meta_path = os.path.join(args.src, ".hf_meta.json")
+            if os.path.exists(meta_path):
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+
+        adapter_name = args.adapter or (meta.get("adapter") if meta else None)
+
+        if adapter_name is None:
+            parser.error("--adapter is required or must exist in .hf_meta.json")
+        adapter = ADAPTERS[adapter_name]
+
         local_hash = meta.get("sha") if meta else None
         try:
             remote_hash = hub.HfApi().dataset_info(args.dst).sha
         except hub.errors.RepositoryNotFoundError:
             remote_hash = None
+
         if not args.y:
             if not local_hash:
                 parser.error(
@@ -195,7 +203,7 @@ def _handle_download(
         if info.sha is None:
             raise RuntimeError(f"Unable to retrieve commit SHA for dataset '{args.src}'")
 
-        meta = {
+        meta: dict[str, str] = {
             "adapter": args.adapter,
             "last_download": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "sha": info.sha,
@@ -233,7 +241,7 @@ def _handle_info(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
         count = _count_dat_records(target)
         print(f"✅ {os.path.basename(target)}: {count} records")
     elif os.path.isdir(target):
-        dat_files = [f for f in os.listdir(target) if f.endswith(".dat")]
+        dat_files = [f for f in cast(list[str], os.listdir(target)) if f.endswith(".dat")]
         if not dat_files:
             parser.error("info: directory contains no .dat files")
         for name in sorted(dat_files):
@@ -330,7 +338,6 @@ def main() -> None:
         adapter = ADAPTERS[args.adapter]
         _handle_download(args, parser, adapter)
 
-
     elif args.command == "split":
         out_dir = args.dst or os.path.splitext(os.path.basename(args.src))[0]
 
@@ -414,6 +421,7 @@ def main() -> None:
             print(f"✅ sorted {target}")
         else:
             parser.error(f"Path '{target}' does not exist")
+
     elif args.command == "info":
         _handle_info(args, parser)
 
