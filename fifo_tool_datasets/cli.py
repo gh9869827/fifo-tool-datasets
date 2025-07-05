@@ -178,25 +178,14 @@ def _handle_download(
 
     adapter_name = args.adapter
 
-    if adapter_name is None:
-        try:
-            meta_path = hub.hf_hub_download(
-                args.src, filename=".hf_meta.json", repo_type="dataset"
-            )
-            with open(meta_path, "r", encoding="utf-8") as f:
-                meta = json.load(f)
-            adapter_name = cast(str | None, meta.get("adapter"))
-        except Exception:
-            adapter_name = None
-
-    if adapter_name is None:
-        parser.error("--adapter is required or must exist in .hf_meta.json")
-
-    adapter = ADAPTERS[adapter_name]
-
-    dataset_dict = adapter.from_hub_to_dataset_dict(args.src)
-
     if dst_is_file:
+        if adapter_name is None:
+            parser.error("--adapter is required")
+
+        adapter = ADAPTERS[adapter_name]
+
+        dataset_dict = adapter.from_hub_to_dataset_dict(args.src)
+
         merged = concatenate_datasets([
             dataset_dict["train"],
             dataset_dict["validation"],
@@ -206,6 +195,25 @@ def _handle_download(
         print(f"✅ merged {len(merged)} records")
         print(f"📄 saved to {args.dst}")
     else:
+        if adapter_name is None:
+            try:
+                meta_path = os.path.join(args.dst, ".hf_meta.json")
+                if os.path.exists(meta_path):
+                    with open(meta_path, "r", encoding="utf-8") as f:
+                        previous_meta: dict[str, str] = json.load(f)
+                    adapter_name = previous_meta.get("adapter")
+                else:
+                    adapter_name = None
+            except (OSError, json.JSONDecodeError):
+                adapter_name = None
+
+        if adapter_name is None:
+            parser.error("--adapter is required or must exist in .hf_meta.json")
+
+        adapter = ADAPTERS[adapter_name]
+
+        dataset_dict = adapter.from_hub_to_dataset_dict(args.src)
+
         for split_name in ("train", "validation", "test"):
             split_data = dataset_dict[split_name]
             adapter.from_dataset_to_dat(
