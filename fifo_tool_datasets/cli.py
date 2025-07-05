@@ -90,8 +90,16 @@ def _handle_upload(
             remote_hash = hub.HfApi().dataset_info(args.dst).sha
         except hub.errors.RepositoryNotFoundError:
             remote_hash = None
-        if local_hash and remote_hash and local_hash != remote_hash and not args.y:
-            parser.error("Remote dataset has changed. Use -y to overwrite.")
+        if not args.y:
+            if not local_hash:
+                parser.error(
+                    "Missing .hf_hash: unable to verify remote sync. Use -y to force overwrite."
+                )
+            if not remote_hash:
+                parser.error("Unable to fetch remote hash. Use -y to force overwrite.")
+            if local_hash != remote_hash:
+                parser.error("Remote dataset has changed. Use -y to overwrite.")
+
         adapter.from_dir_to_hub(
             dat_dir=args.src,
             hub_dataset=args.dst,
