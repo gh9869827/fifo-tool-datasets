@@ -162,7 +162,9 @@ def _count_dat_records(dat_path: str) -> int:
 
 
 def _handle_upload(
-    args: argparse.Namespace, parser: argparse.ArgumentParser
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+    meta_data: DatasetMetadata | None=None
 ) -> None:
     """
     Execute the `upload` command.
@@ -174,8 +176,12 @@ def _handle_upload(
         parser (argparse.ArgumentParser):
             The argument parser used for error reporting.
 
-    The adapter is resolved either from the CLI flag or from `.hf_meta.json`
-    if uploading a directory.
+        meta_data (DatasetMetadata | None):
+            Metadata previously loaded from the destination directory. If None,
+            the function will attempt to load it from `.hf_meta.json` in the appropriate path.
+
+    The adapter is resolved either from the CLI flag or from `.hf_meta.json` if uploading a
+    directory.
     """
     if os.path.isfile(args.src):
         if not args.src.endswith(".dat"):
@@ -206,7 +212,8 @@ def _handle_upload(
             split_ratios=tuple(args.split_ratio),
         )
     else:
-        meta_data = DatasetMetadata.from_directory(args.src)
+        if meta_data is None:
+            meta_data = DatasetMetadata.from_directory(args.src)
 
         adapter_name = args.adapter or meta_data.adapter
 
@@ -241,6 +248,7 @@ def _handle_upload(
 def _handle_download(
     args: argparse.Namespace,
     parser: argparse.ArgumentParser,
+    meta_data: DatasetMetadata | None=None
 ) -> None:
     """
     Execute the `download` command.
@@ -251,6 +259,10 @@ def _handle_download(
 
         parser (argparse.ArgumentParser):
             The argument parser used for error reporting.
+
+        meta_data (DatasetMetadata | None):
+            Metadata previously loaded from the destination directory. If None,
+            the function will attempt to load it from `.hf_meta.json` in the appropriate path.
     """
     if not _is_hf_dataset(args.src):
         parser.error("download: source must be in 'username/repo' format")
@@ -289,7 +301,9 @@ def _handle_download(
         print(f"📄 saved to {args.dst}")
     else:
         if adapter_name is None:
-            adapter_name = DatasetMetadata.from_directory(args.dst).adapter
+            if meta_data is None:
+                meta_data = DatasetMetadata.from_directory(args.dst)
+            adapter_name = meta_data.adapter
 
         if adapter_name is None:
             parser.error("--adapter is required or must exist in .hf_meta.json")
@@ -361,7 +375,7 @@ def _handle_push(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
         y=args.y
     )
 
-    _handle_upload(new_args, parser)
+    _handle_upload(new_args, parser, meta)
 
 
 def _handle_pull(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
@@ -391,7 +405,7 @@ def _handle_pull(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
         y=True # Overwrite is always implied for pull
     )
 
-    _handle_download(new_args, parser)
+    _handle_download(new_args, parser, meta)
 
 
 def _handle_info(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
