@@ -156,6 +156,20 @@ fifo-tool-datasets sort <path> [--adapter dsl]
 
 Currently, only the `dsl` adapter is supported. If the `--adapter` flag is omitted, it defaults to `dsl` automatically.
 
+### 🔄 Documentation and Metadata Sync
+
+When using `upload` or `download` with a **directory source or target**, the CLI automatically:
+
+- Upload `README.md` and `LICENSE` files from the source directory if they exist  
+- Download `README.md` and `LICENSE` files from the Hub if they are present in the remote repository  
+- Cache the latest commit hash at download time (`.hf_hash`) and verify it before upload  
+- Block uploads if the remote has changed since download, unless `-y` is passed to override  
+- Diff local vs. remote documentation files and skip upload if content has not changed
+
+This ensures smooth syncing of documentation while minimizing the risk of overwriting others' changes.
+
+> ⚠️ **Note:** While this provides lightweight safety for collaborative workflows, it does **not offer Git-level guarantees**. For strict versioning, conflict resolution, or rollback, consider using `git clone` and managing pushes manually.
+
 ---
 
 ### 💡 Command examples

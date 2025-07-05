@@ -4,7 +4,7 @@ import re
 import shutil
 from pathlib import Path
 from typing import cast
-from huggingface_hub import HfApi, hf_hub_download
+import huggingface_hub as hub
 # Pylance: suppress missing type stub warning for datasets
 from datasets import (  # type: ignore
     concatenate_datasets,
@@ -87,8 +87,8 @@ def _handle_upload(
             with open(hash_path, "r", encoding="utf-8") as f:
                 local_hash = f.read().strip()
         try:
-            remote_hash = HfApi().dataset_info(args.dst).sha
-        except Exception:
+            remote_hash = hub.HfApi().dataset_info(args.dst).sha
+        except hub.errors.RepositoryNotFoundError:
             remote_hash = None
         if local_hash and remote_hash and local_hash != remote_hash and not args.y:
             parser.error("Remote dataset has changed. Use -y to overwrite.")
@@ -152,14 +152,22 @@ def _handle_download(
             )
             print(f"✅ {split_name}: {len(split_data)} records")
 
-        api = HfApi()
+        api = hub.HfApi()
         info = api.dataset_info(args.src)
+
+        if info.sha is None:
+            raise RuntimeError(f"Unable to retrieve commit SHA for dataset '{args.src}'")
+
         with open(os.path.join(args.dst, ".hf_hash"), "w", encoding="utf-8") as f:
             f.write(info.sha)
+
         for extra in ("README.md", "LICENSE"):
             try:
-                path = hf_hub_download(args.src, filename=extra, repo_type="dataset", revision=info.sha)
-            except Exception:
+                # Pylance: Type of hf_hub_download() is partially unknown
+                path = hub.hf_hub_download(  # type: ignore[reportUnknownMemberType]
+                    args.src, filename=extra, repo_type="dataset", revision=info.sha
+                )
+            except FileNotFoundError:
                 continue
             shutil.copy(path, os.path.join(args.dst, extra))
 

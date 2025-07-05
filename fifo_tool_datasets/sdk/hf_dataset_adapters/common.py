@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import os
 from typing import Iterator, TypedDict, cast
-from huggingface_hub import HfApi, hf_hub_download
+import huggingface_hub as hub
 # Pylance: suppress missing type stub warning for datasets
 from datasets import (  # type: ignore
     Dataset,
@@ -239,11 +239,13 @@ class DatasetAdapter(ABC):
         if not expected_files.issubset(actual_files):
             missing = expected_files - actual_files
             raise ValueError(
-                "Directory must contain train.dat, validation.dat, and test.dat — "
-                f"missing required files: {', '.join(sorted(missing))}"
+                "Directory must contain train.dat, validation.dat, and test.dat. "
+                f"Missing required files: {', '.join(sorted(missing))}"
             )
 
-        extras = {f for f in actual_files - expected_files - optional_files if not f.startswith('.')}
+        extras = {
+            f for f in actual_files - expected_files - optional_files if not f.startswith('.')
+        }
         if extras:
             raise ValueError(
                 "Directory contains unsupported files: " + ", ".join(sorted(extras))
@@ -255,15 +257,18 @@ class DatasetAdapter(ABC):
             ds = self.from_dat_to_wide_dataset(dat_path)
             splits[split_name] = ds
 
-        api = HfApi()
+        api = hub.HfApi()
         for extra in ("README.md", "LICENSE"):
             local_path = os.path.join(dat_dir, extra)
             if os.path.exists(local_path):
                 try:
-                    remote_path = hf_hub_download(hub_dataset, filename=extra, repo_type="dataset")
+                    # Pylance: Type of hf_hub_download() is partially unknown
+                    remote_path = hub.hf_hub_download(  # type: ignore[reportUnknownMemberType]
+                        hub_dataset, filename=extra, repo_type="dataset"
+                    )
                     with open(remote_path, "rb") as f:
                         remote_content = f.read()
-                except Exception:
+                except (hub.errors.RepositoryNotFoundError, FileNotFoundError):
                     remote_content = None
                 with open(local_path, "rb") as f:
                     local_content = f.read()
