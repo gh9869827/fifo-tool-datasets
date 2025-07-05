@@ -1,7 +1,14 @@
 import tempfile
+import pathlib
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
 import pytest
+import huggingface_hub as hub
+# Pylance: suppress missing type stub warning for datasets
+from datasets import (  # type: ignore
+    Dataset,
+    DatasetDict
+)
 from fifo_tool_datasets.sdk.hf_dataset_adapters.common import (
     StructuredConversationRecord
 )
@@ -9,12 +16,6 @@ from fifo_tool_datasets.sdk.hf_dataset_adapters.conversation import (
     ConversationAdapter,
     WideConversationRecord
 )
-# Pylance: suppress missing type stub warning for datasets
-from datasets import (  # type: ignore
-    Dataset,
-    DatasetDict
-)
-import pathlib
 
 
 EXPECTED_CONVERSATION_01_WIDE: list[dict[str, Any]] = [
@@ -307,7 +308,9 @@ def test_from_dir_to_hub_parametrized(
         assert not mock_push.called
     else:
         if directory == "data_dir_docs":
-            mock_download.side_effect = FileNotFoundError
+            mock_download.side_effect = lambda *args, **kwargs: (_ for _ in ()).throw( # type: ignore
+                hub.errors.EntryNotFoundError("file not found")
+            )
         adapter.from_dir_to_hub(
             dat_dir=str(fixtures_dir),
             hub_dataset="dummy-user/dummy-dataset",

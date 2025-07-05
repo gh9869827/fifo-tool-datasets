@@ -181,8 +181,7 @@ class DatasetAdapter(ABC):
                 Tuple of (train, validation, test) ratios. Must sum to 1.0.
 
         Raises:
-            ValueError: If `commit_message` is missing or the split ratios are
-            invalid.
+            ValueError: If `commit_message` is missing or the split ratios are invalid.
         """
         if not commit_message:
             raise ValueError("Commit message is required")
@@ -268,7 +267,7 @@ class DatasetAdapter(ABC):
                     )
                     with open(remote_path, "rb") as f:
                         remote_content = f.read()
-                except (hub.errors.RepositoryNotFoundError, FileNotFoundError):
+                except (hub.errors.RepositoryNotFoundError, hub.errors.EntryNotFoundError):
                     remote_content = None
                 with open(local_path, "rb") as f:
                     local_content = f.read()
