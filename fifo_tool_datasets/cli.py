@@ -524,7 +524,8 @@ def main() -> None:
         "info",
         help="Show record counts and metadata for a file or directory",
     )
-    info_parser.add_argument("target", help=".dat file or directory")
+    info_parser.add_argument("target", nargs="?", default=".",
+                             help=".dat file or directory (defaults to current directory)")
 
     args = parser.parse_args()
 

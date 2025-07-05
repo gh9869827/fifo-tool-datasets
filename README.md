@@ -174,10 +174,10 @@ Currently, only the `dsl` adapter is supported. If the `--adapter` flag is omitt
 
 #### `info`
 
-Show record counts and metadata for a `.dat` file or split directory.
+Show record counts and metadata for a `.dat` file or a split dataset directory.  If `<path>` is omitted, the current directory is used by default.
 
 ```bash
-fifo-tool-datasets info <path>
+fifo-tool-datasets info [<path>]
 ```
 
 ### 🔄 Documentation and Metadata Sync
