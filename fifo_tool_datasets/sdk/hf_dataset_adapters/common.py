@@ -363,7 +363,13 @@ class DatasetAdapter(ABC):
             }
         )
 
-    def from_hub_to_dataset_dict(self, hub_dataset: str) -> DatasetDict:
+    def from_hub_to_dataset_dict(
+        self,
+        hub_dataset: str,
+        *,
+        revision: str | None = None,
+        cache_dir: str | None = None,
+    ) -> DatasetDict:
         """
         Loads a split dataset from the Hugging Face Hub and converts each split
         to JSON-format records using adapter-specific logic.
@@ -372,11 +378,23 @@ class DatasetAdapter(ABC):
             hub_dataset (str):
                 Name of the dataset to load from the Hugging Face Hub.
 
+        Keyword Args:
+            revision (str | None):
+                Git revision (branch, tag or commit SHA) to download. If ``None``,
+                the latest commit on the dataset's default branch is used.
+            cache_dir (str | None):
+                Directory where downloaded files should be stored. If ``None``,
+                the default Hugging Face cache location is used.
+
         Returns:
             DatasetDict:
                 A dictionary of splits ('train', 'validation', 'test').
         """
-        wide_dataset = self.from_hub_to_dataset_wide_dict(hub_dataset)
+        wide_dataset = self.from_hub_to_dataset_wide_dict(
+            hub_dataset,
+            revision=revision,
+            cache_dir=cache_dir,
+        )
 
         required_splits = ("train", "validation", "test")
 
@@ -502,7 +520,13 @@ class DatasetAdapter(ABC):
         """
 
     @abstractmethod
-    def from_hub_to_dataset_wide_dict(self, hub_dataset: str) -> DatasetDict:
+    def from_hub_to_dataset_wide_dict(
+        self,
+        hub_dataset: str,
+        *,
+        revision: str | None = None,
+        cache_dir: str | None = None,
+    ) -> DatasetDict:
         """
         Loads a wide-format dataset from the Hugging Face Hub, organized into train, validation,
         and test splits.
@@ -513,6 +537,14 @@ class DatasetAdapter(ABC):
         Args:
             hub_dataset (str):
                 The Hugging Face dataset identifier (e.g., "username/dataset").
+
+        Keyword Args:
+            revision (str | None):
+                Git revision (branch, tag or commit SHA) to download. If ``None``,
+                the latest commit on the dataset's default branch is used.
+            cache_dir (str | None):
+                Directory where downloaded files should be stored. If ``None``,
+                the default Hugging Face cache location is used.
 
         Returns:
             DatasetDict:

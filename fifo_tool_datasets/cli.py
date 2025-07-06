@@ -4,6 +4,8 @@ import os
 import re
 import shutil
 import json
+import difflib
+import tempfile
 from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
@@ -443,6 +445,92 @@ def _handle_info(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
     else:
         parser.error(f"info: '{target}' is not a valid path")
 
+
+def _handle_diff(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Show differences between local files and the Hugging Face Hub."""
+    dir_path = args.dir
+    if not os.path.isdir(dir_path):
+        parser.error(f"diff: directory '{dir_path}' does not exist")
+
+    meta = DatasetMetadata.from_directory(dir_path)
+
+    if meta.repo_id is None or meta.adapter is None:
+        parser.error("diff: .hf_meta.json must contain 'repo_id' and 'adapter'")
+
+    if args.diff_type == "cache":
+        if meta.sha is None:
+            parser.error("diff: .hf_meta.json missing 'sha'")
+        revision = meta.sha
+    else:
+        info = hub.HfApi().dataset_info(meta.repo_id)
+        if info.sha is None:
+            raise RuntimeError(f"Unable to retrieve commit SHA for dataset '{meta.repo_id}'")
+        revision = info.sha
+
+    filenames: list[str] = [f for f in os.listdir(dir_path) if f.endswith(".dat")]
+    for extra in ("README.md", "LICENSE"):
+        if os.path.exists(os.path.join(dir_path, extra)):
+            filenames.append(extra)
+
+    if not filenames:
+        parser.error("diff: directory contains no .dat files")
+
+    adapter = ADAPTERS[meta.adapter]
+    tmp_dir = tempfile.mkdtemp(dir=dir_path)
+
+    try:
+        remote_dataset = adapter.from_hub_to_dataset_dict(
+            meta.repo_id,
+            revision=revision,
+            cache_dir=tmp_dir,
+        )
+
+        for name in sorted(filenames):
+            local_path = os.path.join(dir_path, name)
+            if name.endswith(".dat"):
+                split_name = os.path.splitext(name)[0]
+                if split_name not in remote_dataset:
+                    print(f"⚠️  remote {name} does not exist")
+                    continue
+
+                remote_dat = os.path.join(tmp_dir, name)
+                adapter.from_dataset_to_dat(remote_dataset[split_name], remote_dat)
+            else:
+                try:
+                    remote_dat = hub.hf_hub_download(
+                        meta.repo_id,
+                        filename=name,
+                        repo_type="dataset",
+                        revision=revision,
+                        local_dir=tmp_dir,
+                        local_dir_use_symlinks=False,
+                    )
+                except (hub.errors.EntryNotFoundError, FileNotFoundError):
+                    print(f"⚠️  remote {name} does not exist")
+                    continue
+
+            with open(remote_dat, "r", encoding="utf-8") as f:
+                remote_lines = f.readlines()
+            with open(local_path, "r", encoding="utf-8") as f:
+                local_lines = f.readlines()
+
+            diff = list(
+                difflib.unified_diff(
+                    remote_lines,
+                    local_lines,
+                    fromfile=f"hub/{name}",
+                    tofile=f"local/{name}",
+                )
+            )
+            if diff:
+                print("".join(diff), end="")
+            else:
+                print(f"✅ {name}: no changes")
+
+            os.remove(remote_dat)
+    finally:
+        shutil.rmtree(tmp_dir)
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="fifo-tool-datasets CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -528,6 +616,15 @@ def main() -> None:
     )
     info_parser.add_argument("target", nargs="?", default=".",
                              help=".dat file or directory (defaults to current directory)")
+
+    # diff
+    diff_parser = subparsers.add_parser(
+        "diff",
+        help="Show differences between local directory and the Hugging Face Hub",
+    )
+    diff_parser.add_argument("dir", nargs="?", default=".", help="Dataset directory (default: .)")
+    diff_parser.add_argument("--type", dest="diff_type", choices=["head", "cache"], required=True,
+                             help="Compare against the hub head or last downloaded cache")
 
     args = parser.parse_args()
 
@@ -626,6 +723,9 @@ def main() -> None:
             print(f"✅ sorted {target}")
         else:
             parser.error(f"Path '{target}' does not exist")
+
+    elif args.command == "diff":
+        _handle_diff(args, parser)
 
     elif args.command == "info":
         _handle_info(args, parser)
