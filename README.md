@@ -201,6 +201,7 @@ When using `upload` or `download` with a **directory source or target**, the CLI
 - Upload `README.md` and `LICENSE` files from the source directory if they exist
 - Download `README.md` and `LICENSE` files from the Hub if they are present in the remote repository
 - Create a `.hf_meta.json` file when downloading, storing the adapter, repo ID, download timestamp, and commit hash
+- Update `.hf_meta.json` with the new commit hash and timestamp after a successful upload
 - Use that metadata to verify the remote commit before upload
 - Auto-detect the adapter on download if `--adapter` isn't provided
 - Block uploads if the remote has changed since download, unless `-y` is passed to override

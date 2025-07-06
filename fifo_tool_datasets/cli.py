@@ -183,7 +183,8 @@ def _handle_upload(
             the function will attempt to load it from `.hf_meta.json` in the appropriate path.
 
     The adapter is resolved either from the CLI flag or from `.hf_meta.json` if uploading a
-    directory.
+    directory. When uploading a directory, `.hf_meta.json` is updated after the upload with
+    the latest commit SHA and timestamp.
     """
     if os.path.isfile(args.src):
         if not args.src.endswith(".dat"):
@@ -245,6 +246,18 @@ def _handle_upload(
             hub_dataset=args.dst,
             commit_message=args.commit_message,
         )
+
+        info = hub.HfApi().dataset_info(args.dst)
+        if info.sha is None:
+            raise RuntimeError(
+                f"Unable to retrieve commit SHA for dataset '{args.dst}'"
+            )
+
+        DatasetMetadata.from_values(
+            adapter=adapter_name,
+            sha=info.sha,
+            repo_id=args.dst,
+        ).save(args.src)
 
 
 def _handle_download(
@@ -350,6 +363,7 @@ def _handle_download(
 def _handle_push(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     """
     Upload a dataset directory using metadata from `.hf_meta.json`.
+    The metadata file is updated after a successful upload.
 
     Args:
         args (argparse.Namespace):
