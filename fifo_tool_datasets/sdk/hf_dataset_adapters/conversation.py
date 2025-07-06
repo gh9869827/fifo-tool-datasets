@@ -276,7 +276,7 @@ class ConversationAdapter(DatasetAdapter):
 
         Keyword Args:
             revision (str | None):
-                Git revision to download. If ``None``, the latest commit on the
+                Git revision to download. If `None`, the latest commit on the
                 dataset's default branch is used.
             cache_dir (str | None):
                 Location to store downloaded files. Uses the default HF cache if
@@ -295,7 +295,7 @@ class ConversationAdapter(DatasetAdapter):
         wide_dataset = load_dataset(
             hub_dataset,
             revision=revision,
-            cache_dir=cache_dir,
+            cache_dir=cache_dir
         )
 
         if not isinstance(wide_dataset, DatasetDict):

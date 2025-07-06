@@ -185,14 +185,14 @@ fifo-tool-datasets info [<path>]
 Compare local files against the Hugging Face Hub.
 
 ```bash
-fifo-tool-datasets diff [<dir>] --type <head|cache>
+fifo-tool-datasets diff [<dir>] [--type head|cache]
 ```
 
-`--type head` fetches the latest files on the hub, while `--type cache` compares
-against the commit recorded in `.hf_meta.json`.
-Remote splits are converted to temporary `.dat` files using the adapter so the
-comparison matches the local format. Downloaded files are stored under the
-target directory and removed afterward.
+By default, `--type head` compares against the latest files on the Hub.  
+Use `--type cache` to compare against the commit recorded in `.hf_meta.json`.
+
+Remote splits are converted to temporary `.dat` files using the adapter so the comparison aligns with the local format.  
+Downloaded files are saved temporarily under the target directory and removed afterward.
 
 ### 🔄 Documentation and Metadata Sync
 

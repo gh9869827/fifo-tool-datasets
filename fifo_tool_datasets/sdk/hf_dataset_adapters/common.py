@@ -380,10 +380,10 @@ class DatasetAdapter(ABC):
 
         Keyword Args:
             revision (str | None):
-                Git revision (branch, tag or commit SHA) to download. If ``None``,
+                Git revision (branch, tag or commit SHA) to download. If `None`,
                 the latest commit on the dataset's default branch is used.
             cache_dir (str | None):
-                Directory where downloaded files should be stored. If ``None``,
+                Directory where downloaded files should be stored. If `None`,
                 the default Hugging Face cache location is used.
 
         Returns:
@@ -393,7 +393,7 @@ class DatasetAdapter(ABC):
         wide_dataset = self.from_hub_to_dataset_wide_dict(
             hub_dataset,
             revision=revision,
-            cache_dir=cache_dir,
+            cache_dir=cache_dir
         )
 
         required_splits = ("train", "validation", "test")
@@ -540,10 +540,10 @@ class DatasetAdapter(ABC):
 
         Keyword Args:
             revision (str | None):
-                Git revision (branch, tag or commit SHA) to download. If ``None``,
+                Git revision (branch, tag or commit SHA) to download. If `None`,
                 the latest commit on the dataset's default branch is used.
             cache_dir (str | None):
-                Directory where downloaded files should be stored. If ``None``,
+                Directory where downloaded files should be stored. If `None`,
                 the default Hugging Face cache location is used.
 
         Returns:

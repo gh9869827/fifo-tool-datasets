@@ -411,7 +411,8 @@ def _handle_pull(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
 
 
 def _handle_info(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    """Display record counts and metadata for a file or directory.
+    """
+    Display record counts and metadata for a file or directory.
 
     Args:
         args (argparse.Namespace):
@@ -447,7 +448,16 @@ def _handle_info(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
 
 
 def _handle_diff(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    """Show differences between local files and the Hugging Face Hub."""
+    """
+    Show differences between local files and the Hugging Face Hub.
+
+    Args:
+        args (argparse.Namespace):
+            Parsed command-line arguments.
+
+        parser (argparse.ArgumentParser):
+            The argument parser used for error reporting.
+    """
     dir_path = args.dir
     if not os.path.isdir(dir_path):
         parser.error(f"diff: directory '{dir_path}' does not exist")
@@ -467,18 +477,18 @@ def _handle_diff(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
             raise RuntimeError(f"Unable to retrieve commit SHA for dataset '{meta.repo_id}'")
         revision = info.sha
 
-    filenames: list[str] = [f for f in os.listdir(dir_path) if f.endswith(".dat")]
+    filenames: list[str] = [f for f in cast(list[str], os.listdir(dir_path)) if f.endswith(".dat")]
     for extra in ("README.md", "LICENSE"):
         if os.path.exists(os.path.join(dir_path, extra)):
             filenames.append(extra)
 
     if not filenames:
-        parser.error("diff: directory contains no .dat files")
+        parser.error("diff: directory is empty")
 
     adapter = ADAPTERS[meta.adapter]
-    tmp_dir = tempfile.mkdtemp(dir=dir_path)
 
-    try:
+    with tempfile.TemporaryDirectory(dir=dir_path) as tmp_dir:
+
         remote_dataset = adapter.from_hub_to_dataset_dict(
             meta.repo_id,
             revision=revision,
@@ -497,15 +507,15 @@ def _handle_diff(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
                 adapter.from_dataset_to_dat(remote_dataset[split_name], remote_dat)
             else:
                 try:
-                    remote_dat = hub.hf_hub_download(
+                    # Pylance: Type of hf_hub_download() is partially unknown
+                    remote_dat = hub.hf_hub_download(  # type: ignore[reportUnknownMemberType]
                         meta.repo_id,
                         filename=name,
                         repo_type="dataset",
                         revision=revision,
-                        local_dir=tmp_dir,
-                        local_dir_use_symlinks=False,
+                        local_dir=tmp_dir
                     )
-                except (hub.errors.EntryNotFoundError, FileNotFoundError):
+                except (hub.errors.RepositoryNotFoundError, hub.errors.EntryNotFoundError):
                     print(f"⚠️  remote {name} does not exist")
                     continue
 
@@ -528,8 +538,7 @@ def _handle_diff(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
                 print(f"✅ {name}: no changes")
 
             os.remove(remote_dat)
-    finally:
-        shutil.rmtree(tmp_dir)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="fifo-tool-datasets CLI")
@@ -623,8 +632,8 @@ def main() -> None:
         help="Show differences between local directory and the Hugging Face Hub",
     )
     diff_parser.add_argument("dir", nargs="?", default=".", help="Dataset directory (default: .)")
-    diff_parser.add_argument("--type", dest="diff_type", choices=["head", "cache"], required=True,
-                             help="Compare against the hub head or last downloaded cache")
+    diff_parser.add_argument("--type", dest="diff_type", choices=["head", "cache"], default="head",
+                             help="Compare against the latest Hub version (default: head) or the last downloaded commit (cache)")
 
     args = parser.parse_args()
 
