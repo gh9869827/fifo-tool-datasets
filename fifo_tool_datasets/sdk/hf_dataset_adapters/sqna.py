@@ -127,7 +127,13 @@ class SQNAAdapter(DatasetAdapter):
         # Pylance: Type of from_dict() is partially unknown
         return Dataset.from_dict(flat_data)  # type: ignore[reportUnknownMemberType]
 
-    def from_hub_to_dataset_wide_dict(self, hub_dataset: str) -> DatasetDict:
+    def from_hub_to_dataset_wide_dict(
+        self,
+        hub_dataset: str,
+        *,
+        revision: str | None = None,
+        cache_dir: str | None = None,
+    ) -> DatasetDict:
         """
         Loads a SQNA-style dataset from the Hugging Face Hub and returns it as a split DatasetDict.
 
@@ -138,6 +144,14 @@ class SQNAAdapter(DatasetAdapter):
             hub_dataset (str):
                 The Hugging Face dataset identifier (e.g., "username/dataset").
 
+        Keyword Args:
+            revision (str | None):
+                Git revision to download. If ``None``, the latest commit on the
+                dataset's default branch is used.
+            cache_dir (str | None):
+                Location to store downloaded files. Uses the default HF cache if
+                omitted.
+
         Returns:
             DatasetDict:
                 A dictionary containing train, validation, and test splits with SQNA-wide format.
@@ -147,7 +161,11 @@ class SQNAAdapter(DatasetAdapter):
                 If the dataset is not split, required splits are missing, or expected fields are
                 absent.
         """
-        wide_dataset = load_dataset(hub_dataset)
+        wide_dataset = load_dataset(
+            hub_dataset,
+            revision=revision,
+            cache_dir=cache_dir,
+        )
 
         if not isinstance(wide_dataset, DatasetDict):
             raise ValueError("Expected a split DatasetDict, but got a flat Dataset.")

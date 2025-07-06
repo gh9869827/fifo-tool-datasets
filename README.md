@@ -180,6 +180,20 @@ Show record counts and metadata for a `.dat` file or a split dataset directory. 
 fifo-tool-datasets info [<path>]
 ```
 
+#### `diff`
+
+Compare local files against the Hugging Face Hub.
+
+```bash
+fifo-tool-datasets diff [<dir>] --type <head|cache>
+```
+
+`--type head` fetches the latest files on the hub, while `--type cache` compares
+against the commit recorded in `.hf_meta.json`.
+Remote splits are converted to temporary `.dat` files using the adapter so the
+comparison matches the local format. Downloaded files are stored under the
+target directory and removed afterward.
+
 ### 🔄 Documentation and Metadata Sync
 
 When using `upload` or `download` with a **directory source or target**, the CLI automatically:
@@ -227,6 +241,9 @@ fifo-tool-datasets sort dsl.dat --adapter dsl
 
 # Info
 fifo-tool-datasets info split_dsl
+
+# Diff against the hub
+fifo-tool-datasets diff split_dsl --type head
 ```
 
 ---
