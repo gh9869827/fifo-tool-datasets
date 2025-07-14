@@ -35,6 +35,7 @@ See format examples below in each adapter section.
 
 ## 📚 Table of Contents
 
+- [🎯 Project Status & Audience](#-project-status--audience)
 - [📐 Dataset Formats](#-dataset-formats)
 - [🔁 Conversion Matrix](#-conversion-matrix)
 - [📦 Installation](#-installation)
@@ -49,7 +50,21 @@ See format examples below in each adapter section.
 - [✅ Validation Rules](#-validation-rules)
 - [🧪 Tests](#-tests)
 - [✅ License](#-license)
-- [📄 Disclaimer](#-disclaimer)
+- [📄 Third-Party Disclaimer](#-third-party-disclaimer)
+
+---
+
+## 🎯 Project Status & Audience
+
+🚧 **Work in Progress** — This project is in **early development**. 🚧
+
+This is a personal project developed and maintained by a solo developer.  
+Contributions, ideas, and feedback are welcome, but development is driven by personal time and priorities.
+
+No official release or pre-release has been published yet. The tool is provided for **preview and experimentation**.  
+**Use at your own risk.**
+
+Designed for **individual users** experimenting with **LLM fine-tuning** and creating their own fine-tuning datasets **by hand**.
 
 ---
 
@@ -454,7 +469,7 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-## 📄 Disclaimer
+## 📄 Third-Party Disclaimer
 
 This project is not affiliated with or endorsed by Hugging Face or the Python Software Foundation.  
 It builds on their open-source technologies under their respective licenses.
