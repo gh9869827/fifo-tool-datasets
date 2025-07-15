@@ -61,10 +61,10 @@ See format examples below in each adapter section.
 This is a personal project developed and maintained by a solo developer.  
 Contributions, ideas, and feedback are welcome, but development is driven by personal time and priorities.
 
+Designed for **individual users** experimenting with **LLM fine-tuning** and creating their own fine-tuning datasets **by hand**.
+
 No official release or pre-release has been published yet. The tool is provided for **preview and experimentation**.  
 **Use at your own risk.**
-
-Designed for **individual users** experimenting with **LLM fine-tuning** and creating their own fine-tuning datasets **by hand**.
 
 ---
 
