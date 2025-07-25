@@ -1,6 +1,6 @@
 [project]
 name = "fifo-tool-datasets"
-version = "0.1.0"
+version = "0.1.0a0"
 description = "Convert .dat files to/from Hugging Face datasets and JSON for LLM fine-tuning"
 authors = [
   { name = "Florent Gastoud" }
