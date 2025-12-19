@@ -286,7 +286,7 @@ class DSLAdapter(DatasetAdapter):
             raise SyntaxError(f"DSL sample is not closed properly, last line {len(lines)}")
 
         if not previous_system:
-            raise SyntaxError("File must contain at least one explicit"
+            raise SyntaxError("File must contain at least one explicit "
                               "system prompt before using '...'.")
 
         # Pylance: Type of from_dict() is partially unknown
