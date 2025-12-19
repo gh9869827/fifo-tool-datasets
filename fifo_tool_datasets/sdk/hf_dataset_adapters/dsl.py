@@ -207,15 +207,15 @@ class DSLAdapter(DatasetAdapter):
             
             tag_char = line[0]
             
-            # Check if this is the expected tag (or an allowed alternative for optional tags)
+            # Check if this is the expected tag
             if tag_char != expected_tag:
                 if not mandatory and expected_tag == "?":
                     # Optional reasoning not present
                     return None
-                elif mandatory:
-                    raise SyntaxError(
-                        f"Expected '{expected_tag}' but got '{tag_char}' at line {line_number}."
-                    )
+                # For all other cases (mandatory or non-'?' optional), this is an error
+                raise SyntaxError(
+                    f"Expected '{expected_tag}' but got '{tag_char}' at line {line_number}."
+                )
             
             # Consume the tag line
             consume_line()
@@ -267,7 +267,9 @@ class DSLAdapter(DatasetAdapter):
             tag_values[2] = process_tag("?", 2, mandatory=False)
             tag_values[3] = process_tag("<", 3, mandatory=True)
             
-            # Ensure we have the required tags
+            # Note: The following check is defensive and should never trigger since
+            # process_tag raises errors for missing mandatory tags. However, it's kept
+            # for additional safety in case of future code changes.
             if tag_values[0] is None or tag_values[1] is None or tag_values[3] is None:
                 peeked = peek_line()
                 line_num = peeked[0] if peeked else len(lines)
