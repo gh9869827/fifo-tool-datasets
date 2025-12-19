@@ -16,12 +16,12 @@ from fifo_tool_datasets.sdk.hf_dataset_adapters.dsl import (
 )
 
 EXPECTED_DSL_01_WIDE: list[dict[str, str]] = [
-    {"system": "System prompt #1", "in": "in #1", "out": "out #1", "reasoning": ""}
+    {"system": "System prompt #1", "in": "in #1", "reasoning": "", "out": "out #1"}
 ]
 
 EXPECTED_DSL_02_WIDE: list[dict[str, str]] = [
-    {"system": "System prompt #1", "in": "in #1", "out": "out #1", "reasoning": ""},
-    {"system": "System prompt #2", "in": "in #2", "out": "out #2", "reasoning": ""}
+    {"system": "System prompt #1", "in": "in #1", "reasoning": "", "out": "out #1"},
+    {"system": "System prompt #2", "in": "in #2", "reasoning": "", "out": "out #2"}
 ]
 
 EXPECTED_DSL_03_WIDE: list[dict[str, str]] = [
@@ -31,35 +31,35 @@ EXPECTED_DSL_03_WIDE: list[dict[str, str]] = [
             "It is optional when reading a file. But when generating a dat file, always add it."
         ),
         "in": "only one line. Same note as above about the blank.",
-        "out": "only one line. Same note as above about the blank.",
         "reasoning": "",
+        "out": "only one line. Same note as above about the blank.",
     },
     {
         "system": "when multi lines\nare needed it is formatted\nlike that",
         "in": "only one line. Same note as above about the blank.",
-        "out": "only one line. Same note as above about the blank.",
         "reasoning": "",
+        "out": "only one line. Same note as above about the blank.",
     },
     {
         "system": "still one line.",
         "in": "one line\nand\nanother here",
-        "out": "but only one here is supported, i.e. one record with single vs multi lines.",
         "reasoning": "",
+        "out": "but only one here is supported, i.e. one record with single vs multi lines.",
     },
     {
         "system": "line 1\nline 2",
         "in": "user input 1\nuser input 2",
-        "out": "dsl output 1\ndsl output 2",
         "reasoning": "",
+        "out": "dsl output 1\ndsl output 2",
     },
 ]
 
 EXPECTED_DSL_04_WIDE: list[dict[str, str]] = [
-    {"system": "Sys #1", "in": "in #1", "out": "out #1", "reasoning": ""},
-    {"system": "Sys #1", "in": "in #2", "out": "out #2", "reasoning": ""},
-    {"system": "Sys multi\nline", "in": "in #3", "out": "out #3", "reasoning": ""},
-    {"system": "Sys multi\nline", "in": "in #4", "out": "out #4", "reasoning": ""},
-    {"system": "Sys multi\nline", "in": "in #5", "out": "out #5", "reasoning": ""},
+    {"system": "Sys #1", "in": "in #1", "reasoning": "", "out": "out #1"},
+    {"system": "Sys #1", "in": "in #2", "reasoning": "", "out": "out #2"},
+    {"system": "Sys multi\nline", "in": "in #3", "reasoning": "", "out": "out #3"},
+    {"system": "Sys multi\nline", "in": "in #4", "reasoning": "", "out": "out #4"},
+    {"system": "Sys multi\nline", "in": "in #5", "reasoning": "", "out": "out #5"},
 ]
 
 EXPECTED_DSL_01_STRUCTURED = [
@@ -173,7 +173,7 @@ def test_from_dat_to_wide_dataset(filename: str, expected: list[dict[str, str]])
     ("dsl_broken_01.dat", r"The file must start with '---'."),
     ("dsl_broken_02.dat", r"DSL sample is not closed properly, last line 8"),
     ("dsl_broken_03.dat", r"Missing '---' block delimiter at line 5."),
-    ("dsl_broken_04.dat", r"Expected '\?' at start of reasoning or output line in block at line 4."),
+    ("dsl_broken_04.dat", r"Expected '\? or <' at start of reasoning or output line in block at line 4."),
     ("dsl_broken_05.dat", r"Expected '>' at start of input line in block at line 3."),
     ("dsl_broken_06.dat", r"Expected '\$' at start of system line in block at line 2."),
     ("dsl_broken_07.dat", r"Expected '\$' at start of system line in block at line 2."),
@@ -299,11 +299,16 @@ def test_from_dataset_to_wide_dataset_dsl(
 
     wide_dataset = adapter.from_dataset_to_wide_dataset(structured_dataset)
 
-    assert wide_dataset.column_names == ["system", "in", "out", "reasoning"]
+    assert wide_dataset.column_names == ["system", "in", "reasoning", "out"]
     assert len(wide_dataset) == len(expected_wide)
     for i, expected in enumerate(expected_wide):
-        # Add reasoning field to expected dict for comparison
-        expected_with_reasoning = {**expected, "reasoning": ""}
+        # Build expected dict with correct field order
+        expected_with_reasoning = {
+            "system": expected["system"],
+            "in": expected["in"],
+            "reasoning": "",
+            "out": expected["out"]
+        }
         assert wide_dataset[i] == expected_with_reasoning
 
 
@@ -360,9 +365,9 @@ $ b
     sorted_ds = adapter.from_dat_to_wide_dataset(str(dat_path))
     # Pylance: Type of to_list() is partially unknown
     assert sorted_ds.to_list() == [  # type: ignore[reportUnknownMemberType]
-        {"system": "a", "in": "q1", "out": "a1", "reasoning": ""},
-        {"system": "b", "in": "q1", "out": "a0", "reasoning": ""},
-        {"system": "b", "in": "q2", "out": "a2", "reasoning": ""},
+        {"system": "a", "in": "q1", "reasoning": "", "out": "a1"},
+        {"system": "b", "in": "q1", "reasoning": "", "out": "a0"},
+        {"system": "b", "in": "q2", "reasoning": "", "out": "a2"},
     ]
 
 
@@ -584,13 +589,13 @@ def test_from_dataset_to_wide_dataset_with_reasoning() -> None:
 
     wide_dataset = adapter.from_dataset_to_wide_dataset(structured_dataset)
 
-    assert wide_dataset.column_names == ["system", "in", "out", "reasoning"]
+    assert wide_dataset.column_names == ["system", "in", "reasoning", "out"]
     # Pylance: Type of to_list() is partially unknown
     result = wide_dataset.to_list()  # type: ignore[reportUnknownMemberType]
     assert len(result) == 1
     assert result[0] == {
         "system": "You are a precise DSL parser.",
         "in": "today at 5:30PM",
-        "out": "SET_TIME(TODAY, 17, 30)",
-        "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30"
+        "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30",
+        "out": "SET_TIME(TODAY, 17, 30)"
     }

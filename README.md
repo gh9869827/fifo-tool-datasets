@@ -404,7 +404,7 @@ The `?` section:
 - Is **optional** and appears **between** the `>` (input) and `<` (output) sections
 - Follows the same formatting rules as other sections (single-line or multi-line)
 - Is stored in the wide format under the `reasoning` field
-- Is linked to the assistant message in JSON format via message ID
+- Is stored inline in the assistant message's `metadata.reasoning` field in JSON format
 
 Multi-line entries are supported and can be freely mixed with single-line ones.
 A space after the marker on single-line entries is optional:
