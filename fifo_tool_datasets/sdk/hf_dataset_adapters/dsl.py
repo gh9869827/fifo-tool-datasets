@@ -151,161 +151,156 @@ class DSLAdapter(DatasetAdapter):
         if lines[0] != "---":
             raise SyntaxError("The file must start with '---'.")
 
-        # Tag transition map: current tag -> allowed next tags
-        tag_transitions = {
-            "$": {">"},
-            ">": {"?", "<"},
-            "?": {"<"},
-            "<": None  # End of sequence
-        }
-        tag_idx = 0
-        current_tag: str | None = None
-        content_lines: list[str] = []
         # Fixed indices: 0=system, 1=input, 2=reasoning, 3=output
         tag_values: list[str | None] = [None, None, None, None]
         previous_system: str | None = None
-
-        def finalize_tag(tag: str,
-                         line_no: int,
-                         target_idx: int,
-                         previous_system: str | None
-                         ) -> tuple[int, str | None]:
+        
+        # Convert to list for easier iteration with lookahead
+        remaining_lines = list(enumerate(lines[1:], start=2))
+        current_pos = 0
+        
+        def peek_line() -> tuple[int, str] | None:
+            """Peek at the next line without consuming it."""
+            if current_pos < len(remaining_lines):
+                return remaining_lines[current_pos]
+            return None
+        
+        def consume_line() -> tuple[int, str] | None:
+            """Consume and return the next line."""
+            nonlocal current_pos
+            if current_pos < len(remaining_lines):
+                line = remaining_lines[current_pos]
+                current_pos += 1
+                return line
+            return None
+        
+        def process_tag(expected_tag: str, target_idx: int, mandatory: bool) -> str | None:
+            """
+            Process a single tag section. Returns the parsed value or None if optional and not present.
+            Stops when the next tag is detected (lookahead, does not consume).
+            
+            Args:
+                expected_tag: The tag character to expect ('$', '>', '?', '<')
+                target_idx: The index in tag_values to store the result
+                mandatory: Whether this tag must be present
+            
+            Returns:
+                The parsed value for this tag, or None if optional and not present
+            """
+            nonlocal previous_system
+            
+            peeked = peek_line()
+            if peeked is None:
+                if mandatory:
+                    raise SyntaxError(f"Expected '{expected_tag}' but reached end of file.")
+                return None
+            
+            line_number, line = peeked
+            
+            # Check if line starts with a tag
+            if not line.startswith(("$", ">", "?", "<")):
+                if mandatory:
+                    raise SyntaxError(
+                        f"Expected '{expected_tag}' at start of line {line_number}."
+                    )
+                return None
+            
+            tag_char = line[0]
+            
+            # Check if this is the expected tag (or an allowed alternative for optional tags)
+            if tag_char != expected_tag:
+                if not mandatory and expected_tag == "?":
+                    # Optional reasoning not present
+                    return None
+                elif mandatory:
+                    raise SyntaxError(
+                        f"Expected '{expected_tag}' but got '{tag_char}' at line {line_number}."
+                    )
+            
+            # Consume the tag line
+            consume_line()
+            
+            # Parse the tag content
+            rest = line[1:]
+            if rest.startswith(" "):
+                rest = rest[1:]
+            
+            content_lines = [rest] if rest else []
+            
+            # Continue reading lines until we hit the next tag or block delimiter
+            while True:
+                peeked = peek_line()
+                if peeked is None:
+                    break
+                next_line_number, next_line = peeked
+                if next_line == "---" or next_line.startswith(("$", ">", "?", "<")):
+                    break
+                consume_line()
+                content_lines.append(next_line)
+            
+            # Validate and finalize content
             if not content_lines or all(x == "" for x in content_lines):
-                raise SyntaxError(f"Empty tag '{tag}' detected at line {line_no}.")
-
+                raise SyntaxError(f"Empty tag '{tag_char}' detected at line {line_number}.")
+            
             value = "\n".join(content_lines)
-
-            if tag == "$":
+            
+            # Handle system prompt placeholder
+            if tag_char == "$":
                 if value.strip() == "...":
                     if previous_system is None:
-                        raise SyntaxError("System prompt placeholder '...' without "
-                                          f"preceding system at line {line_no}."
+                        raise SyntaxError(
+                            f"System prompt placeholder '...' without "
+                            f"preceding system at line {line_number}."
                         )
                     value = previous_system
                 else:
                     previous_system = value
-
-            tag_values[target_idx] = value
-            # Update tag_idx to track progression
-            new_tag_idx = target_idx + 1 if target_idx < 2 else target_idx
-            content_lines.clear()
-            return new_tag_idx, previous_system
-
-        for line_number, line in enumerate(lines[1:], start=2):
-            # Check if we hit block delimiter
-            if line == "---":
-                if current_tag is not None:
-                    # Need to determine target_idx for the current tag
-                    if current_tag == "$":
-                        target_idx = 0
-                    elif current_tag == ">":
-                        target_idx = 1
-                    elif current_tag == "?":
-                        target_idx = 2
-                    else:  # "<"
-                        target_idx = 3
-                    tag_idx, previous_system = \
-                        finalize_tag(current_tag, line_number, target_idx, previous_system)
-                    current_tag = None
-                
-                # Check if we have the required tags: $, >, and <
-                # The ? (reasoning) is optional (index 2), but output (index 3) is required
-                if tag_values[0] is None or tag_values[1] is None or tag_values[3] is None:
-                    raise SyntaxError("Each DSL sample must contain $, > and < in order "
-                                      f"at line {line_number}.")
-                
-                # Store the data (fixed indices: 0=system, 1=input, 2=reasoning, 3=output)
-                flat_data["system"].append(cast(str, tag_values[0]))
-                flat_data["in"].append(cast(str, tag_values[1]))
-                flat_data["reasoning"].append(tag_values[2] if tag_values[2] is not None else "")
-                flat_data["out"].append(cast(str, tag_values[3]))
-                
-                tag_values[:] = [None, None, None, None]
-                tag_idx = 0
-                continue
-
-            if line.startswith(("$", ">", "?", "<")):
-                # Finalize the current tag if one is active
-                if current_tag is not None:
-                    tag_idx, previous_system = \
-                        finalize_tag(current_tag, line_number, tag_idx, previous_system)
-                    current_tag = None
-                
-                tag_char = line[0]
-                
-                # Check if output is already filled (we're done with this block)
-                if tag_values[3] is not None:
-                    raise SyntaxError(f"Missing '---' block delimiter at line {line_number}.")
-                
-                # Validate tag sequence using transition map
-                if tag_idx == 0:
-                    # Expecting system prompt
-                    if tag_char != "$":
-                        raise SyntaxError(
-                            f"Expected '$' at start of system line in block at line {line_number}."
-                        )
-                    target_idx = 0
-                elif tag_idx == 1:
-                    # After system, expecting input
-                    if tag_char != ">":
-                        raise SyntaxError(
-                            f"Expected '>' at start of input line in block at line {line_number}."
-                        )
-                    target_idx = 1
-                elif tag_values[1] is not None and tag_values[3] is None:
-                    # After input, before output: can be ? or <
-                    allowed = tag_transitions[">"]
-                    if tag_char not in allowed:
-                        raise SyntaxError(
-                            f"Expected '<' at start of output line in block at line {line_number}."
-                        )
-                    # Map tag to fixed index: ? -> 2 (reasoning), < -> 3 (output)
-                    target_idx = 2 if tag_char == "?" else 3
-                elif tag_values[2] is not None and tag_values[3] is None:
-                    # After reasoning, expecting output
-                    if tag_char != "<":
-                        raise SyntaxError(
-                            f"Expected '<' at start of output line in block at line {line_number}."
-                        )
-                    target_idx = 3
-                else:
-                    raise SyntaxError(f"Unexpected tag '{tag_char}' at line {line_number}.")
-                
-                rest = line[1:]
-                if rest:
-                    if rest.startswith(" "):
-                        rest = rest[1:]
-                    content_lines = [rest]
-                    tag_idx, previous_system = \
-                        finalize_tag(tag_char, line_number, target_idx, previous_system)
-                else:
-                    current_tag = tag_char
-                    content_lines = []
-                continue
-
-            if current_tag is None:
-                # Determine what we're expecting based on what's been filled
-                if tag_values[0] is None:
-                    expected = "$"
-                    role = "system"
-                elif tag_values[1] is None:
-                    expected = ">"
-                    role = "input"
-                elif tag_values[3] is None:
-                    expected = "? or <"
-                    role = "reasoning or output"
-                else:
-                    expected = "---"
-                    role = "block delimiter"
+            
+            return value
+        
+        # Main parsing loop: process blocks
+        # Note: lines[1:] starts after the first ---, so we process tags directly
+        while current_pos < len(remaining_lines):
+            # Process one complete block: $ > [?] <
+            tag_values[0] = process_tag("$", 0, mandatory=True)
+            tag_values[1] = process_tag(">", 1, mandatory=True)
+            tag_values[2] = process_tag("?", 2, mandatory=False)
+            tag_values[3] = process_tag("<", 3, mandatory=True)
+            
+            # Ensure we have the required tags
+            if tag_values[0] is None or tag_values[1] is None or tag_values[3] is None:
+                peeked = peek_line()
+                line_num = peeked[0] if peeked else len(lines)
+                raise SyntaxError("Each DSL sample must contain $, > and < in order "
+                                  f"at line {line_num}.")
+            
+            # Store the data (fixed indices: 0=system, 1=input, 2=reasoning, 3=output)
+            flat_data["system"].append(cast(str, tag_values[0]))
+            flat_data["in"].append(cast(str, tag_values[1]))
+            flat_data["reasoning"].append(tag_values[2] if tag_values[2] is not None else "")
+            flat_data["out"].append(cast(str, tag_values[3]))
+            
+            # Reset for next block
+            tag_values[:] = [None, None, None, None]
+            
+            # Check for closing ---
+            peeked = peek_line()
+            if peeked is None:
+                raise SyntaxError(f"DSL sample is not closed properly, last line {len(lines)}")
+            
+            closing_line_number, closing_line = peeked
+            if closing_line != "---":
                 raise SyntaxError(
-                    f"Expected '{expected}' at start of {role} line in block "
-                    f"at line {line_number}."
+                    f"Expected closing '---' but got '{closing_line}' at line {closing_line_number}."
                 )
-
-            content_lines.append(line)
-
-        if current_tag is not None or tag_idx != 0:
-            raise SyntaxError(f"DSL sample is not closed properly, last line {len(lines)}")
+            # Consume the closing ---
+            consume_line()
+            
+            # Check if there's more content (another block)
+            peeked_next = peek_line()
+            if peeked_next is None:
+                # End of file
+                break
 
         if not previous_system:
             raise SyntaxError("File must contain at least one explicit "
