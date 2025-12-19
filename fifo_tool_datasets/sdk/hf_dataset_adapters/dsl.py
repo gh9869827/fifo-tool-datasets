@@ -100,13 +100,16 @@ class DSLAdapter(DatasetAdapter):
         [
             {
                 "messages": [
-                    {"id": "m0", "role": "system", "content": "You are a precise DSL parser."},
-                    {"id": "m1", "role": "user", "content": "today at 5:30PM"},
-                    {"id": "m2", "role": "assistant", "content": "SET_TIME(TODAY, 17, 30)"}
-                ],
-                "reasoning": {
-                    "m2": "base=TODAY\ntime.hour=17\ntime.minute=30"
-                }
+                    {"role": "system", "content": "You are a precise DSL parser."},
+                    {"role": "user", "content": "today at 5:30PM"},
+                    {
+                        "role": "assistant",
+                        "content": "SET_TIME(TODAY, 17, 30)",
+                        "metadata": {
+                            "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30"
+                        }
+                    }
+                ]
             }
         ]
 
@@ -114,11 +117,10 @@ class DSLAdapter(DatasetAdapter):
         [
             {
                 "messages": [
-                    {"id": "m0", "role": "system", "content": "You are a precise DSL parser."},
-                    {"id": "m1", "role": "user", "content": "set alarm tomorrow at 7am"},
-                    {"id": "m2", "role": "assistant", "content": "SET_ALARM(TOMORROW, 7, 0)"}
-                ],
-                "reasoning": {}
+                    {"role": "system", "content": "You are a precise DSL parser."},
+                    {"role": "user", "content": "set alarm tomorrow at 7am"},
+                    {"role": "assistant", "content": "SET_ALARM(TOMORROW, 7, 0)"}
+                ]
             }
         ]
     """
@@ -327,10 +329,9 @@ class DSLAdapter(DatasetAdapter):
             flat_data["in"].append(messages[1]["content"])
             flat_data["out"].append(messages[2]["content"])
             
-            # Extract reasoning if present
-            reasoning_map = structured_record.get("reasoning", {})
-            assistant_id = messages[2].get("id", "")
-            reasoning_content = reasoning_map.get(assistant_id, "") if reasoning_map and assistant_id else ""
+            # Extract reasoning from assistant message metadata if present
+            assistant_metadata = messages[2].get("metadata", {})
+            reasoning_content = assistant_metadata.get("reasoning", "")
             flat_data["reasoning"].append(reasoning_content)
 
         # Pylance: Type of from_dict() is partially unknown
@@ -406,28 +407,29 @@ class DSLAdapter(DatasetAdapter):
 
         Returns:
             JsonConversation:
-                A list of dicts with `messages` containing system, user and assistant messages
-                with IDs, and an optional `reasoning` mapping linking assistant message IDs to
-                reasoning content.
+                A list of dicts with `messages` containing system, user and assistant messages.
+                Reasoning, if present, is stored in the assistant message's `metadata` field.
         """
         result = []
-        for idx, record in enumerate(self._iter_wide_records(wide_dataset)):
-            messages = [
-                {"id": f"m{idx * 3}", "role": "system", "content": record["system"]},
-                {"id": f"m{idx * 3 + 1}", "role": "user", "content": record["in"]},
-                {"id": f"m{idx * 3 + 2}", "role": "assistant", "content": record["out"]},
-            ]
+        for record in self._iter_wide_records(wide_dataset):
+            # Build assistant message
+            assistant_msg = {
+                "role": "assistant",
+                "content": record["out"]
+            }
             
-            conversation: dict[str, any] = {"messages": messages}
-            
-            # Add reasoning if present and non-empty
+            # Add reasoning to metadata if present and non-empty
             reasoning_content = record.get("reasoning", "")
             if reasoning_content:
-                conversation["reasoning"] = {f"m{idx * 3 + 2}": reasoning_content}
-            else:
-                conversation["reasoning"] = {}
+                assistant_msg["metadata"] = {"reasoning": reasoning_content}
             
-            result.append(conversation)
+            messages = [
+                {"role": "system", "content": record["system"]},
+                {"role": "user", "content": record["in"]},
+                assistant_msg
+            ]
+            
+            result.append({"messages": messages})
         
         return result
 

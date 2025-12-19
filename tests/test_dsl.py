@@ -64,97 +64,91 @@ EXPECTED_DSL_04_WIDE: list[dict[str, str]] = [
 
 EXPECTED_DSL_01_STRUCTURED = [
     {"messages": [
-        {"id": "m0", "role": "system",     "content": "System prompt #1"},
-        {"id": "m1", "role": "user",       "content": "in #1"},
-        {"id": "m2", "role": "assistant",  "content": "out #1"}
-    ], "reasoning": {}}
+        {"role": "system",     "content": "System prompt #1"},
+        {"role": "user",       "content": "in #1"},
+        {"role": "assistant",  "content": "out #1"}
+    ]}
 ]
 
 EXPECTED_DSL_02_STRUCTURED = [
     {"messages": [
-        {"id": "m0", "role": "system",     "content": "System prompt #1"},
-        {"id": "m1", "role": "user",       "content": "in #1"},
-        {"id": "m2", "role": "assistant",  "content": "out #1"}
-    ], "reasoning": {}},
+        {"role": "system",     "content": "System prompt #1"},
+        {"role": "user",       "content": "in #1"},
+        {"role": "assistant",  "content": "out #1"}
+    ]},
     {"messages": [
-        {"id": "m3", "role": "system",     "content": "System prompt #2"},
-        {"id": "m4", "role": "user",       "content": "in #2"},
-        {"id": "m5", "role": "assistant",  "content": "out #2"}
-    ], "reasoning": {}}
+        {"role": "system",     "content": "System prompt #2"},
+        {"role": "user",       "content": "in #2"},
+        {"role": "assistant",  "content": "out #2"}
+    ]}
 ]
 
 EXPECTED_DSL_03_STRUCTURED = [
     {
         "messages": [
             {
-                "id": "m0",
                 "role": "system",
                 "content": (
                     "only one line. Note that after the $ there is a blank added for readability. "
                     "It is optional when reading a file. But when generating a dat file, always add it."
                 ),
             },
-            {"id": "m1", "role": "user", "content": "only one line. Same note as above about the blank."},
-            {"id": "m2", "role": "assistant", "content": "only one line. Same note as above about the blank."},
-        ],
-        "reasoning": {}
+            {"role": "user", "content": "only one line. Same note as above about the blank."},
+            {"role": "assistant", "content": "only one line. Same note as above about the blank."},
+        ]
     },
     {
         "messages": [
-            {"id": "m3", "role": "system", "content": "when multi lines\nare needed it is formatted\nlike that"},
-            {"id": "m4", "role": "user", "content": "only one line. Same note as above about the blank."},
-            {"id": "m5", "role": "assistant", "content": "only one line. Same note as above about the blank."},
-        ],
-        "reasoning": {}
+            {"role": "system", "content": "when multi lines\nare needed it is formatted\nlike that"},
+            {"role": "user", "content": "only one line. Same note as above about the blank."},
+            {"role": "assistant", "content": "only one line. Same note as above about the blank."},
+        ]
     },
     {
         "messages": [
-            {"id": "m6", "role": "system", "content": "still one line."},
-            {"id": "m7", "role": "user", "content": "one line\nand\nanother here"},
+            {"role": "system", "content": "still one line."},
+            {"role": "user", "content": "one line\nand\nanother here"},
             {
-                "id": "m8",
                 "role": "assistant",
                 "content": "but only one here is supported, i.e. one record with single vs multi lines.",
             },
-        ],
-        "reasoning": {}
+        ]
     },
     {
         "messages": [
-            {"id": "m9", "role": "system", "content": "line 1\nline 2"},
-            {"id": "m10", "role": "user", "content": "user input 1\nuser input 2"},
-            {"id": "m11", "role": "assistant", "content": "dsl output 1\ndsl output 2"},
-        ],
-        "reasoning": {}
+            {"role": "system", "content": "line 1\nline 2"},
+            {"role": "user", "content": "user input 1\nuser input 2"},
+            {"role": "assistant", "content": "dsl output 1\ndsl output 2"},
+        ]
     },
 ]
 
 EXPECTED_DSL_04_STRUCTURED = [
     {"messages": [
-        {"id": "m0", "role": "system", "content": "Sys #1"},
-        {"id": "m1", "role": "user", "content": "in #1"},
-        {"id": "m2", "role": "assistant", "content": "out #1"},
-    ], "reasoning": {}},
+        {"role": "system", "content": "Sys #1"},
+        {"role": "user", "content": "in #1"},
+        {"role": "assistant", "content": "out #1"},
+    ]},
     {"messages": [
-        {"id": "m3", "role": "system", "content": "Sys #1"},
-        {"id": "m4", "role": "user", "content": "in #2"},
-        {"id": "m5", "role": "assistant", "content": "out #2"},
-    ], "reasoning": {}},
+        {"role": "system", "content": "Sys #1"},
+        {"role": "user", "content": "in #2"},
+        {"role": "assistant", "content": "out #2"},
+    ]},
     {"messages": [
-        {"id": "m6", "role": "system", "content": "Sys multi\nline"},
-        {"id": "m7", "role": "user", "content": "in #3"},
-        {"id": "m8", "role": "assistant", "content": "out #3"},
-    ], "reasoning": {}},
+        {"role": "system", "content": "Sys multi\nline"},
+        {"role": "user", "content": "in #3"},
+        {"role": "assistant", "content": "out #3"},
+    ]},
     {"messages": [
-        {"id": "m9", "role": "system", "content": "Sys multi\nline"},
-        {"id": "m10", "role": "user", "content": "in #4"},
-        {"id": "m11", "role": "assistant", "content": "out #4"},
-    ], "reasoning": {}},
+        {"role": "system", "content": "Sys multi\nline"},
+        {"role": "user", "content": "in #4"},
+        {"role": "assistant", "content": "out #4"},
+    ]},
     {"messages": [
-        {"id": "m12", "role": "system", "content": "Sys multi\nline"},
-        {"id": "m13", "role": "user", "content": "in #5"},
-        {"id": "m14", "role": "assistant", "content": "out #5"},
-    ], "reasoning": {}},
+        {"role": "system", "content": "Sys multi\nline"},
+        {"role": "user", "content": "in #5"},
+        {"role": "assistant", "content": "out #5"},
+    ]},
 ]
 
 
@@ -450,13 +444,16 @@ def test_from_wide_dataset_to_json_with_reasoning() -> None:
     assert len(json_records) == 1
     assert json_records[0] == {
         "messages": [
-            {"id": "m0", "role": "system", "content": "You are a precise DSL parser."},
-            {"id": "m1", "role": "user", "content": "today at 5:30PM"},
-            {"id": "m2", "role": "assistant", "content": "SET_TIME(TODAY, 17, 30)"}
-        ],
-        "reasoning": {
-            "m2": "base=TODAY\ntime.hour=17\ntime.minute=30"
-        }
+            {"role": "system", "content": "You are a precise DSL parser."},
+            {"role": "user", "content": "today at 5:30PM"},
+            {
+                "role": "assistant",
+                "content": "SET_TIME(TODAY, 17, 30)",
+                "metadata": {
+                    "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30"
+                }
+            }
+        ]
     }
 
 
@@ -476,11 +473,10 @@ def test_from_wide_dataset_to_json_without_reasoning() -> None:
     assert len(json_records) == 1
     assert json_records[0] == {
         "messages": [
-            {"id": "m0", "role": "system", "content": "You are a precise DSL parser."},
-            {"id": "m1", "role": "user", "content": "set alarm for 8am"},
-            {"id": "m2", "role": "assistant", "content": "SET_ALARM(TODAY, 8, 0)"}
-        ],
-        "reasoning": {}
+            {"role": "system", "content": "You are a precise DSL parser."},
+            {"role": "user", "content": "set alarm for 8am"},
+            {"role": "assistant", "content": "SET_ALARM(TODAY, 8, 0)"}
+        ]
     }
 
 
@@ -568,13 +564,16 @@ def test_from_dataset_to_wide_dataset_with_reasoning() -> None:
     structured_data = [
         {
             "messages": [
-                {"id": "m0", "role": "system", "content": "You are a precise DSL parser."},
-                {"id": "m1", "role": "user", "content": "today at 5:30PM"},
-                {"id": "m2", "role": "assistant", "content": "SET_TIME(TODAY, 17, 30)"}
-            ],
-            "reasoning": {
-                "m2": "base=TODAY\ntime.hour=17\ntime.minute=30"
-            }
+                {"role": "system", "content": "You are a precise DSL parser."},
+                {"role": "user", "content": "today at 5:30PM"},
+                {
+                    "role": "assistant",
+                    "content": "SET_TIME(TODAY, 17, 30)",
+                    "metadata": {
+                        "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30"
+                    }
+                }
+            ]
         }
     ]
 

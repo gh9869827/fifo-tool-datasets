@@ -466,11 +466,10 @@ With reasoning:
 [
   {
     "messages": [
-      {"id": "m0", "role": "system", "content": "You are a precise DSL parser."},
-      {"id": "m1", "role": "user", "content": "today at 5:30PM"},
-      {"id": "m2", "role": "assistant", "content": "SET_TIME(TODAY, 17, 30)"}
-    ],
-    "reasoning": {}
+      {"role": "system", "content": "You are a precise DSL parser."},
+      {"role": "user", "content": "today at 5:30PM"},
+      {"role": "assistant", "content": "SET_TIME(TODAY, 17, 30)"}
+    ]
   }
 ]
 ```
@@ -481,13 +480,16 @@ With reasoning:
 [
   {
     "messages": [
-      {"id": "m0", "role": "system", "content": "You are a precise DSL parser."},
-      {"id": "m1", "role": "user", "content": "today at 5:30PM"},
-      {"id": "m2", "role": "assistant", "content": "SET_TIME(TODAY, 17, 30)"}
-    ],
-    "reasoning": {
-      "m2": "base=TODAY\ntime.hour=17\ntime.minute=30"
-    }
+      {"role": "system", "content": "You are a precise DSL parser."},
+      {"role": "user", "content": "today at 5:30PM"},
+      {
+        "role": "assistant",
+        "content": "SET_TIME(TODAY, 17, 30)",
+        "metadata": {
+          "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30"
+        }
+      }
+    ]
   }
 ]
 ```
