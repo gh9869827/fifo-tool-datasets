@@ -180,12 +180,16 @@ class DSLAdapter(DatasetAdapter):
             Stops when the next tag is detected (lookahead, does not consume).
             
             Args:
-                expected_tag: The tag character to expect ('$', '>', '?', '<')
-                target_idx: The index in tag_values to store the result
-                mandatory: Whether this tag must be present
+                expected_tag (str):
+                    The tag character to expect ('$', '>', '?', '<')
+                target_idx (int):
+                    The index in tag_values to store the result
+                mandatory (bool):
+                    Whether this tag must be present
             
             Returns:
-                The parsed value for this tag, or None if optional and not present
+                str | None:
+                    The parsed value for this tag, or None if optional and not present
             """
             nonlocal previous_system
             
@@ -501,12 +505,12 @@ class DSLAdapter(DatasetAdapter):
 
         This helper function casts each item in the dataset to a `Dict[str, str]` to enable
         static type checking and clean field access (`record["system"]`, `record["in"]`, 
-        `record["out"]`), which are expected fields in wide-format DSL datasets.
+        `record["reasoning"]`, `record["out"]`), which are expected fields in wide-format DSL datasets.
 
         Args:
             dataset (Dataset):
                 A Hugging Face Dataset where each row is expected to contain
-                string fields `"system"`, `"in"` and `"out"`.
+                string fields `"system"`, `"in"`, `"reasoning"`, and `"out"`.
 
         Returns:
             Iterator[Dict[str, str]]:
@@ -517,14 +521,14 @@ class DSLAdapter(DatasetAdapter):
 
     def sort_dat_file(self, dat_filename: str) -> None:
         """
-        Sort a DSL `.dat` file in place by system prompt, input, and output.
+        Sort a DSL `.dat` file in place by system prompt, input, reasoning, and output.
 
         Args:
             dat_filename (str):
                 Path to the `.dat` file to sort. The file is read, parsed into
                 a wide-format dataset, sorted lexicographically by `system`,
-                `in`, and `out` fields, and written back to the same location.
+                `in`, `reasoning`, and `out` fields, and written back to the same location.
         """
         dataset = self.from_dat_to_wide_dataset(dat_filename)
-        sorted_dataset = dataset.sort(["system", "in", "out"])
+        sorted_dataset = dataset.sort(["system", "in", "reasoning", "out"])
         self.from_wide_dataset_to_dat(sorted_dataset, dat_filename)
