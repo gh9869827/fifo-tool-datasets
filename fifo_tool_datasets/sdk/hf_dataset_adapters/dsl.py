@@ -209,6 +209,7 @@ class DSLAdapter(DatasetAdapter):
             
             # Check if this is the expected tag
             if tag_char != expected_tag:
+                # Currently only the '?' tag is optional
                 if not mandatory:
                     # Optional tag not present
                     return None
