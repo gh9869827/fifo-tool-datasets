@@ -209,10 +209,10 @@ class DSLAdapter(DatasetAdapter):
             
             # Check if this is the expected tag
             if tag_char != expected_tag:
-                if not mandatory and expected_tag == "?":
-                    # Optional reasoning not present
+                if not mandatory:
+                    # Optional tag not present
                     return None
-                # For all other cases (mandatory or non-'?' optional), this is an error
+                # For mandatory tags, this is an error
                 raise SyntaxError(
                     f"Expected '{expected_tag}' but got '{tag_char}' at line {line_number}."
                 )
@@ -318,7 +318,7 @@ class DSLAdapter(DatasetAdapter):
 
         Each conversation must contain exactly three messages: a system prompt, a user input (the
         text to be converted into a DSL expression) and an assistant output (the parsed DSL
-        expression). The reasoning field is extracted from the reasoning mapping if present.
+        expression). The reasoning field is extracted from assistant.metadata.reasoning if present.
 
         Args:
             dataset (Dataset):
