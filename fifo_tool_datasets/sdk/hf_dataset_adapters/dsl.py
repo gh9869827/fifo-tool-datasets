@@ -297,10 +297,10 @@ class DSLAdapter(DatasetAdapter):
                                   f"at line {line_num}.")
 
             # Store the data (fixed indices: 0=system, 1=input, 2=reasoning, 3=output)
-            flat_data["system"].append(tag_values[0])  # type: ignore[arg-type]
-            flat_data["in"].append(tag_values[1])  # type: ignore[arg-type]
+            flat_data["system"].append(tag_values[0])
+            flat_data["in"].append(tag_values[1])
             flat_data["reasoning"].append(tag_values[2] if tag_values[2] is not None else "")
-            flat_data["out"].append(tag_values[3])  # type: ignore[arg-type]
+            flat_data["out"].append(tag_values[3])
 
             # Reset for next block
             tag_values[:] = [None, None, None, None]
@@ -434,7 +434,10 @@ class DSLAdapter(DatasetAdapter):
                 # Create a new column with empty strings
                 split_dataset = wide_dataset[split]
                 reasoning_values = [""] * len(split_dataset)
-                wide_dataset[split] = split_dataset.add_column("reasoning", reasoning_values)
+                # Pylance: Type of add_column() is partially unknown
+                wide_dataset[split] = split_dataset.add_column( # type: ignore[reportUnknownMemberType] # pylint: disable=line-too-long
+                    "reasoning", reasoning_values
+                )
 
         return wide_dataset
 
