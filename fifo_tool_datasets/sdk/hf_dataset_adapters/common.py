@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import os
-from typing import Iterator, TypedDict, cast
+from typing import Iterator, TypedDict, cast, NotRequired
 import huggingface_hub as hub
 # Pylance: suppress missing type stub warning for datasets
 from datasets import (  # type: ignore
@@ -40,9 +40,14 @@ class StructureMessageRecord(TypedDict):
 
         content (str):
             The textual content of the message.
+
+        metadata (dict[str, str], optional):
+            Optional metadata dictionary. Currently used to store reasoning
+            for assistant messages.
     """
     role: str
     content: str
+    metadata: NotRequired[dict[str, str]]
 
 class StructuredConversationRecord(TypedDict):
     """

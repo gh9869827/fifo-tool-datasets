@@ -495,12 +495,10 @@ def test_from_wide_dataset_to_dat_with_reasoning() -> None:
         "out": ["SET_TIME(TODAY, 17, 30)"]
     })
 
-    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".dat") as tmp:
-        tmp_path = pathlib.Path(tmp.name)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = pathlib.Path(tmpdir) / "test.dat"
         adapter.from_wide_dataset_to_dat(dataset, str(tmp_path))
-
-    with open(tmp_path, "r", encoding="utf-8") as f:
-        content = f.read()
+        content = tmp_path.read_text(encoding="utf-8")
 
     expected = """---
 $ You are a precise DSL parser.
@@ -525,12 +523,10 @@ def test_from_wide_dataset_to_dat_without_reasoning() -> None:
         "out": ["SET_ALARM(TODAY, 8, 0)"]
     })
 
-    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".dat") as tmp:
-        tmp_path = pathlib.Path(tmp.name)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = pathlib.Path(tmpdir) / "test.dat"
         adapter.from_wide_dataset_to_dat(dataset, str(tmp_path))
-
-    with open(tmp_path, "r", encoding="utf-8") as f:
-        content = f.read()
+        content = tmp_path.read_text(encoding="utf-8")
 
     expected = """---
 $ You are a precise DSL parser.
@@ -550,12 +546,12 @@ def test_roundtrip_with_reasoning() -> None:
     wide_dataset = adapter.from_dat_to_wide_dataset(str(path))
 
     # Write wide → .dat
-    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".dat") as tmp:
-        tmp_path = pathlib.Path(tmp.name)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = pathlib.Path(tmpdir) / "test.dat"
         adapter.from_wide_dataset_to_dat(wide_dataset, str(tmp_path))
 
-    # Load again
-    wide_dataset2 = adapter.from_dat_to_wide_dataset(str(tmp_path))
+        # Load again
+        wide_dataset2 = adapter.from_dat_to_wide_dataset(str(tmp_path))
 
     # Compare
     # Pylance: Type of to_list() is partially unknown
@@ -596,6 +592,24 @@ def test_from_dataset_to_wide_dataset_with_reasoning() -> None:
     assert result[0] == {
         "system": "You are a precise DSL parser.",
         "in": "today at 5:30PM",
+        "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30",
+        "out": "SET_TIME(TODAY, 17, 30)"
+    }
+
+
+def test_multiline_with_content_on_same_line() -> None:
+    """Test parsing multi-line sections where content starts on the same line as the tag."""
+    adapter = DSLAdapter()
+    path = pathlib.Path(__file__).parent / "fixtures" / "dsl_multiline_sameline.dat"
+    
+    dataset = adapter.from_dat_to_wide_dataset(str(path))
+    
+    # Pylance: Type of to_list() is partially unknown
+    result = dataset.to_list()  # type: ignore[reportUnknownMemberType]
+    assert len(result) == 1
+    assert result[0] == {
+        "system": "You are a precise DSL parser.\nLine 2 of system prompt",
+        "in": "today at 5:30PM\nAdditional context",
         "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30",
         "out": "SET_TIME(TODAY, 17, 30)"
     }

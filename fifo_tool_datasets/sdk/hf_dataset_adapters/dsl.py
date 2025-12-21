@@ -25,10 +25,10 @@ class DSLAdapter(DatasetAdapter):
         < <dsl_output>
         ---
 
-    Multi-line entries are supported and can be freely mixed with single-line entries. To write a
-    multi-line value, place the marker on its own line (e.g., just `$`, `>`, `?`, or `<`), followed by
-    the content block:
-
+    Multi-line entries are supported and can be freely mixed with single-line entries. You can write
+    a multi-line value in two ways:
+    
+    1. Place the marker on its own line (e.g., just `$`, `>`, `?`, or `<`), followed by the content block:
         ---
         $
         <system_prompt line 1>
@@ -39,10 +39,21 @@ class DSLAdapter(DatasetAdapter):
         ?
         <reasoning line 1>
         <reasoning line 2>
-        < <dsl_output> # single line input
+        < <dsl_output>
         ---
 
-    Each block (`$`, `>`, `?`, `<`) supports multi-line values using this style. The parser automatically
+    2. Start content on the same line as the marker, followed by additional lines:
+        ---
+        $ <system line 1>
+        <system line 2>
+        > <user line 1>
+        <user line 2>
+        ? <reasoning line 1>
+        <reasoning line 2>
+        < <dsl_output>
+        ---
+
+    Each block (`$`, `>`, `?`, `<`) supports multi-line values using either style. The parser automatically
     detects and parses both formats. The `?` (reasoning) section is optional and appears between
     the `>` (input) and `<` (output) sections when present.
 
@@ -174,7 +185,7 @@ class DSLAdapter(DatasetAdapter):
                 return line
             return None
         
-        def process_tag(expected_tag: str, target_idx: int, mandatory: bool) -> str | None:
+        def process_tag(expected_tag: str, mandatory: bool) -> str | None:
             """
             Process a single tag section. Returns the parsed value or None if optional and not present.
             Stops when the next tag is detected (lookahead, does not consume).
@@ -182,8 +193,6 @@ class DSLAdapter(DatasetAdapter):
             Args:
                 expected_tag (str):
                     The tag character to expect ('$', '>', '?', '<')
-                target_idx (int):
-                    The index in tag_values to store the result
                 mandatory (bool):
                     Whether this tag must be present
             
@@ -237,7 +246,7 @@ class DSLAdapter(DatasetAdapter):
                 peeked = peek_line()
                 if peeked is None:
                     break
-                next_line_number, next_line = peeked
+                _, next_line = peeked
                 if next_line == "---" or next_line.startswith(("$", ">", "?", "<")):
                     break
                 consume_line()
@@ -267,10 +276,10 @@ class DSLAdapter(DatasetAdapter):
         # Note: lines[1:] starts after the first ---, so we process tags directly
         while current_pos < len(remaining_lines):
             # Process one complete block: $ > [?] <
-            tag_values[0] = process_tag("$", 0, mandatory=True)
-            tag_values[1] = process_tag(">", 1, mandatory=True)
-            tag_values[2] = process_tag("?", 2, mandatory=False)
-            tag_values[3] = process_tag("<", 3, mandatory=True)
+            tag_values[0] = process_tag("$", mandatory=True)
+            tag_values[1] = process_tag(">", mandatory=True)
+            tag_values[2] = process_tag("?", mandatory=False)
+            tag_values[3] = process_tag("<", mandatory=True)
             
             # Note: The following check is defensive and should never trigger since
             # process_tag raises errors for missing mandatory tags. However, it's kept
@@ -282,10 +291,10 @@ class DSLAdapter(DatasetAdapter):
                                   f"at line {line_num}.")
             
             # Store the data (fixed indices: 0=system, 1=input, 2=reasoning, 3=output)
-            flat_data["system"].append(cast(str, tag_values[0]))
-            flat_data["in"].append(cast(str, tag_values[1]))
+            flat_data["system"].append(tag_values[0])  # type: ignore[arg-type]
+            flat_data["in"].append(tag_values[1])  # type: ignore[arg-type]
             flat_data["reasoning"].append(tag_values[2] if tag_values[2] is not None else "")
-            flat_data["out"].append(cast(str, tag_values[3]))
+            flat_data["out"].append(tag_values[3])  # type: ignore[arg-type]
             
             # Reset for next block
             tag_values[:] = [None, None, None, None]
