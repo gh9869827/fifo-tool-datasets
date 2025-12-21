@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import cast
 import huggingface_hub as hub
+from huggingface_hub.errors import EntryNotFoundError
 # Pylance: suppress missing type stub warning for datasets
 from datasets import (  # type: ignore
     concatenate_datasets,
@@ -353,7 +354,7 @@ def _handle_download(
                 path = hub.hf_hub_download(  # type: ignore[reportUnknownMemberType]
                     args.src, filename=extra, repo_type="dataset", revision=info.sha
                 )
-            except FileNotFoundError:
+            except (FileNotFoundError, EntryNotFoundError):
                 continue
             shutil.copy(path, os.path.join(args.dst, extra))
 
