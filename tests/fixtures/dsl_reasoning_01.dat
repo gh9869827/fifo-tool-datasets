@@ -1,0 +1,9 @@
+---
+$ You are a precise DSL parser.
+> today at 5:30PM
+?
+base=TODAY
+time.hour=17
+time.minute=30
+< SET_TIME(TODAY, 17, 30)
+---

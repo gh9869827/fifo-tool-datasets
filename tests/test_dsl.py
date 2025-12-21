@@ -9,6 +9,7 @@ from datasets import (  # type: ignore
     DatasetDict
 )
 from fifo_tool_datasets.sdk.hf_dataset_adapters.common import (
+    JsonConversation,
     StructuredConversationRecord
 )
 from fifo_tool_datasets.sdk.hf_dataset_adapters.dsl import (
@@ -16,12 +17,12 @@ from fifo_tool_datasets.sdk.hf_dataset_adapters.dsl import (
 )
 
 EXPECTED_DSL_01_WIDE: list[dict[str, str]] = [
-    {"system": "System prompt #1", "in": "in #1", "out": "out #1"}
+    {"system": "System prompt #1", "in": "in #1", "reasoning": "", "out": "out #1"}
 ]
 
 EXPECTED_DSL_02_WIDE: list[dict[str, str]] = [
-    {"system": "System prompt #1", "in": "in #1", "out": "out #1"},
-    {"system": "System prompt #2", "in": "in #2", "out": "out #2"}
+    {"system": "System prompt #1", "in": "in #1", "reasoning": "", "out": "out #1"},
+    {"system": "System prompt #2", "in": "in #2", "reasoning": "", "out": "out #2"}
 ]
 
 EXPECTED_DSL_03_WIDE: list[dict[str, str]] = [
@@ -31,31 +32,35 @@ EXPECTED_DSL_03_WIDE: list[dict[str, str]] = [
             "It is optional when reading a file. But when generating a dat file, always add it."
         ),
         "in": "only one line. Same note as above about the blank.",
+        "reasoning": "",
         "out": "only one line. Same note as above about the blank.",
     },
     {
         "system": "when multi lines\nare needed it is formatted\nlike that",
         "in": "only one line. Same note as above about the blank.",
+        "reasoning": "",
         "out": "only one line. Same note as above about the blank.",
     },
     {
         "system": "still one line.",
         "in": "one line\nand\nanother here",
+        "reasoning": "",
         "out": "but only one here is supported, i.e. one record with single vs multi lines.",
     },
     {
         "system": "line 1\nline 2",
         "in": "user input 1\nuser input 2",
+        "reasoning": "",
         "out": "dsl output 1\ndsl output 2",
     },
 ]
 
 EXPECTED_DSL_04_WIDE: list[dict[str, str]] = [
-    {"system": "Sys #1", "in": "in #1", "out": "out #1"},
-    {"system": "Sys #1", "in": "in #2", "out": "out #2"},
-    {"system": "Sys multi\nline", "in": "in #3", "out": "out #3"},
-    {"system": "Sys multi\nline", "in": "in #4", "out": "out #4"},
-    {"system": "Sys multi\nline", "in": "in #5", "out": "out #5"},
+    {"system": "Sys #1", "in": "in #1", "reasoning": "", "out": "out #1"},
+    {"system": "Sys #1", "in": "in #2", "reasoning": "", "out": "out #2"},
+    {"system": "Sys multi\nline", "in": "in #3", "reasoning": "", "out": "out #3"},
+    {"system": "Sys multi\nline", "in": "in #4", "reasoning": "", "out": "out #4"},
+    {"system": "Sys multi\nline", "in": "in #5", "reasoning": "", "out": "out #5"},
 ]
 
 EXPECTED_DSL_01_STRUCTURED = [
@@ -168,17 +173,17 @@ def test_from_dat_to_wide_dataset(filename: str, expected: list[dict[str, str]])
 @pytest.mark.parametrize("filename,expected_error", [
     ("dsl_broken_01.dat", r"The file must start with '---'."),
     ("dsl_broken_02.dat", r"DSL sample is not closed properly, last line 8"),
-    ("dsl_broken_03.dat", r"Missing '---' block delimiter at line 5."),
-    ("dsl_broken_04.dat", r"Expected '<' at start of output line in block at line 4."),
-    ("dsl_broken_05.dat", r"Expected '>' at start of input line in block at line 3."),
-    ("dsl_broken_06.dat", r"Expected '\$' at start of system line in block at line 2."),
-    ("dsl_broken_07.dat", r"Expected '\$' at start of system line in block at line 2."),
-    ("dsl_broken_08.dat", r"Expected '>' at start of input line in block at line 7."),
-    ("dsl_broken_09.dat", r"Missing '---' block delimiter at line 5."),
-    ("dsl_broken_10.dat", r"Each DSL sample must contain \$, > and < in order at line 4."),
+    ("dsl_broken_03.dat", r"Expected closing '---' but got '\$System prompt #2' at line 5."),
+    ("dsl_broken_04.dat", r"Expected '<' at start of line 5."),
+    ("dsl_broken_05.dat", r"Expected '>' but got '<' at line 4."),
+    ("dsl_broken_06.dat", r"Expected '\$' but got '>' at line 2."),
+    ("dsl_broken_07.dat", r"Expected '\$' at start of line 2."),
+    ("dsl_broken_08.dat", r"Expected '>' but got '<' at line 7."),
+    ("dsl_broken_09.dat", r"Expected closing '---' but got '\$ System prompt #2' at line 5."),
+    ("dsl_broken_10.dat", r"Expected '<' at start of line 4."),
     ("dsl_broken_11.dat", r"The file is empty."),
-    ("dsl_broken_12.dat", r"Empty tag '>' detected at line 4."),
-    ("dsl_broken_13.dat", r"Empty tag '<' detected at line 8."),
+    ("dsl_broken_12.dat", r"Empty tag '>' detected at line 3."),
+    ("dsl_broken_13.dat", r"Empty tag '<' detected at line 6."),
     ("dsl_broken_14.dat", r"System prompt placeholder '\.\.\.' without preceding system at line 2."),
 ])
 def test_from_dat_to_wide_dataset_broken(filename: str, expected_error: str) -> None:
@@ -295,10 +300,17 @@ def test_from_dataset_to_wide_dataset_dsl(
 
     wide_dataset = adapter.from_dataset_to_wide_dataset(structured_dataset)
 
-    assert wide_dataset.column_names == ["system", "in", "out"]
+    assert wide_dataset.column_names == ["system", "in", "reasoning", "out"]
     assert len(wide_dataset) == len(expected_wide)
     for i, expected in enumerate(expected_wide):
-        assert wide_dataset[i] == expected
+        # Build expected dict with correct field order
+        expected_with_reasoning = {
+            "system": expected["system"],
+            "in": expected["in"],
+            "reasoning": "",
+            "out": expected["out"]
+        }
+        assert wide_dataset[i] == expected_with_reasoning
 
 
 def test_from_hub_to_dataset_wide_dict_success() -> None:
@@ -354,7 +366,251 @@ $ b
     sorted_ds = adapter.from_dat_to_wide_dataset(str(dat_path))
     # Pylance: Type of to_list() is partially unknown
     assert sorted_ds.to_list() == [  # type: ignore[reportUnknownMemberType]
-        {"system": "a", "in": "q1", "out": "a1"},
-        {"system": "b", "in": "q1", "out": "a0"},
-        {"system": "b", "in": "q2", "out": "a2"},
+        {"system": "a", "in": "q1", "reasoning": "", "out": "a1"},
+        {"system": "b", "in": "q1", "reasoning": "", "out": "a0"},
+        {"system": "b", "in": "q2", "reasoning": "", "out": "a2"},
     ]
+
+
+# Tests for reasoning support
+
+def test_from_dat_to_wide_dataset_with_reasoning() -> None:
+    """Test parsing .dat file with reasoning section."""
+    adapter = DSLAdapter()
+    path = pathlib.Path(__file__).parent / "fixtures" / "dsl_reasoning_01.dat"
+    dataset = adapter.from_dat_to_wide_dataset(str(path))
+
+    assert isinstance(dataset, Dataset)
+    # Pylance: Type of to_list() is partially unknown
+    result: list[Any] = dataset.to_list()  # type: ignore[reportUnknownMemberType]
+    assert len(result) == 1
+    assert result[0] == {
+        "system": "You are a precise DSL parser.",
+        "in": "today at 5:30PM",
+        "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30",
+        "out": "SET_TIME(TODAY, 17, 30)"
+    }
+
+
+def test_from_dat_to_wide_dataset_mixed_reasoning() -> None:
+    """Test parsing .dat file with mixed reasoning (some records with, some without)."""
+    adapter = DSLAdapter()
+    path = pathlib.Path(__file__).parent / "fixtures" / "dsl_reasoning_02.dat"
+    dataset = adapter.from_dat_to_wide_dataset(str(path))
+
+    assert isinstance(dataset, Dataset)
+    # Pylance: Type of to_list() is partially unknown
+    result: list[Any] = dataset.to_list()  # type: ignore[reportUnknownMemberType]
+    assert len(result) == 2
+    assert result[0] == {
+        "system": "You are a precise DSL parser.",
+        "in": "today at 5:30PM",
+        "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30",
+        "out": "SET_TIME(TODAY, 17, 30)"
+    }
+    assert result[1] == {
+        "system": "You are a precise DSL parser.",
+        "in": "set alarm for 8am",
+        "reasoning": "",
+        "out": "SET_ALARM(TODAY, 8, 0)"
+    }
+
+
+def test_from_dat_to_wide_dataset_single_line_reasoning() -> None:
+    """Test parsing .dat file with single-line reasoning."""
+    adapter = DSLAdapter()
+    path = pathlib.Path(__file__).parent / "fixtures" / "dsl_reasoning_03.dat"
+    dataset = adapter.from_dat_to_wide_dataset(str(path))
+
+    assert isinstance(dataset, Dataset)
+    # Pylance: Type of to_list() is partially unknown
+    result: list[Any] = dataset.to_list()  # type: ignore[reportUnknownMemberType]
+    assert len(result) == 1
+    assert result[0] == {
+        "system": "You are a precise DSL parser.",
+        "in": "set alarm for 8am",
+        "reasoning": "Single line reasoning",
+        "out": "SET_ALARM(TODAY, 8, 0)"
+    }
+
+
+def test_from_wide_dataset_to_json_with_reasoning() -> None:
+    """Test conversion to JSON format with reasoning."""
+    adapter = DSLAdapter()
+    dataset = Dataset.from_dict({  # type: ignore[reportUnknownMemberType]
+        "system": ["You are a precise DSL parser."],
+        "in": ["today at 5:30PM"],
+        "reasoning": ["base=TODAY\ntime.hour=17\ntime.minute=30"],
+        "out": ["SET_TIME(TODAY, 17, 30)"]
+    })
+
+    json_records = adapter.from_wide_dataset_to_json(dataset)
+
+    assert isinstance(json_records, list)
+    assert len(json_records) == 1
+    assert json_records[0] == {
+        "messages": [
+            {"role": "system", "content": "You are a precise DSL parser."},
+            {"role": "user", "content": "today at 5:30PM"},
+            {
+                "role": "assistant",
+                "content": "SET_TIME(TODAY, 17, 30)",
+                "metadata": {
+                    "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30"
+                }
+            }
+        ]
+    }
+
+
+def test_from_wide_dataset_to_json_without_reasoning() -> None:
+    """Test conversion to JSON format without reasoning (backward compatibility)."""
+    adapter = DSLAdapter()
+    dataset = Dataset.from_dict({  # type: ignore[reportUnknownMemberType]
+        "system": ["You are a precise DSL parser."],
+        "in": ["set alarm for 8am"],
+        "reasoning": [""],
+        "out": ["SET_ALARM(TODAY, 8, 0)"]
+    })
+
+    json_records = adapter.from_wide_dataset_to_json(dataset)
+
+    assert isinstance(json_records, list)
+    assert len(json_records) == 1
+    assert json_records[0] == {
+        "messages": [
+            {"role": "system", "content": "You are a precise DSL parser."},
+            {"role": "user", "content": "set alarm for 8am"},
+            {"role": "assistant", "content": "SET_ALARM(TODAY, 8, 0)"}
+        ]
+    }
+
+
+def test_from_wide_dataset_to_dat_with_reasoning() -> None:
+    """Test writing .dat file with reasoning."""
+    adapter = DSLAdapter()
+    dataset = Dataset.from_dict({  # type: ignore[reportUnknownMemberType]
+        "system": ["You are a precise DSL parser."],
+        "in": ["today at 5:30PM"],
+        "reasoning": ["base=TODAY\ntime.hour=17\ntime.minute=30"],
+        "out": ["SET_TIME(TODAY, 17, 30)"]
+    })
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = pathlib.Path(tmpdir) / "test.dat"
+        adapter.from_wide_dataset_to_dat(dataset, str(tmp_path))
+        content = tmp_path.read_text(encoding="utf-8")
+
+    expected = """---
+$ You are a precise DSL parser.
+> today at 5:30PM
+?
+base=TODAY
+time.hour=17
+time.minute=30
+< SET_TIME(TODAY, 17, 30)
+---
+"""
+    assert content == expected
+
+
+def test_from_wide_dataset_to_dat_without_reasoning() -> None:
+    """Test writing .dat file without reasoning (backward compatibility)."""
+    adapter = DSLAdapter()
+    dataset = Dataset.from_dict({  # type: ignore[reportUnknownMemberType]
+        "system": ["You are a precise DSL parser."],
+        "in": ["set alarm for 8am"],
+        "reasoning": [""],
+        "out": ["SET_ALARM(TODAY, 8, 0)"]
+    })
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = pathlib.Path(tmpdir) / "test.dat"
+        adapter.from_wide_dataset_to_dat(dataset, str(tmp_path))
+        content = tmp_path.read_text(encoding="utf-8")
+
+    expected = """---
+$ You are a precise DSL parser.
+> set alarm for 8am
+< SET_ALARM(TODAY, 8, 0)
+---
+"""
+    assert content == expected
+
+
+def test_roundtrip_with_reasoning() -> None:
+    """Test roundtrip conversion: .dat -> wide -> .dat with reasoning."""
+    adapter = DSLAdapter()
+    path = pathlib.Path(__file__).parent / "fixtures" / "dsl_reasoning_01.dat"
+
+    # Load .dat → wide
+    wide_dataset = adapter.from_dat_to_wide_dataset(str(path))
+
+    # Write wide → .dat
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = pathlib.Path(tmpdir) / "test.dat"
+        adapter.from_wide_dataset_to_dat(wide_dataset, str(tmp_path))
+
+        # Load again
+        wide_dataset2 = adapter.from_dat_to_wide_dataset(str(tmp_path))
+
+    # Compare
+    # Pylance: Type of to_list() is partially unknown
+    assert wide_dataset.to_list() == wide_dataset2.to_list()  # type: ignore[reportUnknownMemberType]
+
+
+def test_from_dataset_to_wide_dataset_with_reasoning() -> None:
+    """Test conversion from structured format with reasoning to wide format."""
+    adapter = DSLAdapter()
+
+    structured_data: JsonConversation = [
+        {
+            "messages": [
+                {"role": "system", "content": "You are a precise DSL parser."},
+                {"role": "user", "content": "today at 5:30PM"},
+                {
+                    "role": "assistant",
+                    "content": "SET_TIME(TODAY, 17, 30)",
+                    "metadata": {
+                        "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30"
+                    }
+                }
+            ]
+        }
+    ]
+
+    # Pylance: Type of from_list() is partially unknown
+    structured_dataset = Dataset.from_list(  # type: ignore[reportUnknownMemberType]
+        cast(list[dict[str, Any]], structured_data)
+    )
+
+    wide_dataset = adapter.from_dataset_to_wide_dataset(structured_dataset)
+
+    assert wide_dataset.column_names == ["system", "in", "reasoning", "out"]
+    # Pylance: Type of to_list() is partially unknown
+    result: list[Any] = wide_dataset.to_list()  # type: ignore[reportUnknownMemberType]
+    assert len(result) == 1
+    assert result[0] == {
+        "system": "You are a precise DSL parser.",
+        "in": "today at 5:30PM",
+        "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30",
+        "out": "SET_TIME(TODAY, 17, 30)"
+    }
+
+
+def test_multiline_with_content_on_same_line() -> None:
+    """Test parsing multi-line sections where content starts on the same line as the tag."""
+    adapter = DSLAdapter()
+    path = pathlib.Path(__file__).parent / "fixtures" / "dsl_multiline_sameline.dat"
+
+    dataset = adapter.from_dat_to_wide_dataset(str(path))
+
+    # Pylance: Type of to_list() is partially unknown
+    result: list[Any] = dataset.to_list()  # type: ignore[reportUnknownMemberType]
+    assert len(result) == 1
+    assert result[0] == {
+        "system": "You are a precise DSL parser.\nLine 2 of system prompt",
+        "in": "today at 5:30PM\nAdditional context",
+        "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30",
+        "out": "SET_TIME(TODAY, 17, 30)"
+    }

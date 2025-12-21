@@ -4,7 +4,12 @@ from datasets import (  # type: ignore
     DatasetDict,
     load_dataset  # type: ignore[reportUnknownVariableType]
 )
-from .common import DatasetAdapter, JsonConversation
+from .common import (
+    DatasetAdapter,
+    JsonConversation,
+    StructureMessageRecord,
+    StructuredConversationRecord
+)
 
 class DSLAdapter(DatasetAdapter):
     """
@@ -15,18 +20,21 @@ class DSLAdapter(DatasetAdapter):
       - One system prompt per sample
       - One user input per sample
       - One DSL output per sample
+      - Optional reasoning (chain-of-thought) per sample
 
-    Expected compact `.dat` file format (3 lines per sample - with optional space after marker):
+    Expected compact `.dat` file format (3-4 lines per sample - with optional space after marker):
         ---
         $ <system_prompt>
         ><user_input>  # no space required after marker
+        ? <reasoning>  # optional
         < <dsl_output>
         ---
 
-    Multi-line entries are supported and can be freely mixed with single-line entries. To write a
-    multi-line value, place the marker on its own line (e.g., just `$`, `>`, or `<`), followed by
-    the content block:
+    Multi-line entries are supported and can be freely mixed with single-line entries. You can write
+    a multi-line value in two ways:
 
+    1. Place the marker on its own line (e.g., just `$`, `>`, `?`, or `<`), followed by the content
+       block:
         ---
         $
         <system_prompt line 1>
@@ -34,11 +42,26 @@ class DSLAdapter(DatasetAdapter):
         >
         <user_input line 1>
         <user_input line 2>
-        < <dsl_output> # single line input
+        ?
+        <reasoning line 1>
+        <reasoning line 2>
+        < <dsl_output>
         ---
 
-    Each block (`$`, `>`, `<`) supports multi-line values using this style. The parser automatically
-    detects and parses both formats.
+    2. Start content on the same line as the marker, followed by additional lines:
+        ---
+        $ <system line 1>
+        <system line 2>
+        > <user line 1>
+        <user line 2>
+        ? <reasoning line 1>
+        <reasoning line 2>
+        < <dsl_output>
+        ---
+
+    Each block (`$`, `>`, `?`, `<`) supports multi-line values using either style. The parser
+    automatically detects and parses both formats. The `?` (reasoning) section is optional and
+    appears between the `>` (input) and `<` (output) sections when present.
 
     To avoid repeating the same system prompt across many samples, a `$` section
     may contain only `...`. This placeholder indicates that the system prompt is
@@ -50,25 +73,64 @@ class DSLAdapter(DatasetAdapter):
     Wide-format dataset fields:
         - system (str): system prompt (can be reused or unique)
         - in (str): user input string
+        - reasoning (str): optional reasoning content (empty string if not present)
         - out (str): expected DSL output string
 
-    Example `.dat` file:
+    Example `.dat` file with reasoning:
+        ---
+        $ You are a precise DSL parser.
+        > today at 5:30PM
+        ? base=TODAY
+        time.hour=17
+        time.minute=30
+        < SET_TIME(TODAY, 17, 30)
+        ---
+
+    Example `.dat` file without reasoning:
         ---
         $ You are a precise DSL parser.
         > set alarm tomorrow at 7am
         < SET_ALARM(TOMORROW, 7, 0)
         ---
 
-    Corresponding dataset (wide format):
+    Corresponding dataset (wide format) with reasoning:
+        [
+            {
+                "system": "You are a precise DSL parser.",
+                "in": "today at 5:30PM",
+                "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30",
+                "out": "SET_TIME(TODAY, 17, 30)"
+            }
+        ]
+
+    Corresponding dataset (wide format) without reasoning:
         [
             {
                 "system": "You are a precise DSL parser.",
                 "in": "set alarm tomorrow at 7am",
+                "reasoning": "",
                 "out": "SET_ALARM(TOMORROW, 7, 0)"
             }
         ]
 
-    JSON format:
+    JSON format with reasoning:
+        [
+            {
+                "messages": [
+                    {"role": "system", "content": "You are a precise DSL parser."},
+                    {"role": "user", "content": "today at 5:30PM"},
+                    {
+                        "role": "assistant",
+                        "content": "SET_TIME(TODAY, 17, 30)",
+                        "metadata": {
+                            "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30"
+                        }
+                    }
+                ]
+            }
+        ]
+
+    JSON format without reasoning:
         [
             {
                 "messages": [
@@ -90,12 +152,12 @@ class DSLAdapter(DatasetAdapter):
 
         Returns:
             Dataset:
-                A Dataset with three fields: `system`, `in` and `out`.
+                A Dataset with four fields: `system`, `in`, `reasoning`, and `out`.
 
         Raises:
             SyntaxError: If the file is malformed (e.g. unpaired question/answer).
         """
-        flat_data: dict[str, list[str]] = {"system": [], "in": [], "out": []}
+        flat_data: dict[str, list[str]] = {"system": [], "in": [], "reasoning": [], "out": []}
 
         with open(dat_filename, "r", encoding="utf-8") as f:
             lines = [line.rstrip("\r\n") for line in f]
@@ -106,93 +168,165 @@ class DSLAdapter(DatasetAdapter):
         if lines[0] != "---":
             raise SyntaxError("The file must start with '---'.")
 
-        expected_tags = ["$", ">", "<"]
-        tag_idx = 0
-        current_tag: str | None = None
-        content_lines: list[str] = []
-        tag_values: list[str | None] = [None, None, None]
+        # Fixed indices: 0=system, 1=input, 2=reasoning, 3=output
+        tag_values: list[str | None] = [None, None, None, None]
         previous_system: str | None = None
 
-        def finalize_tag(tag: str,
-                         line_no: int,
-                         tag_idx: int,
-                         previous_system: str | None
-                         ) -> tuple[int, str | None]:
+        # Convert to list for easier iteration with lookahead
+        remaining_lines = list(enumerate(lines[1:], start=2))
+        current_pos = 0
+
+        def peek_line() -> tuple[int, str] | None:
+            """Peek at the next line without consuming it."""
+            if current_pos < len(remaining_lines):
+                return remaining_lines[current_pos]
+            return None
+
+        def consume_line() -> tuple[int, str] | None:
+            """Consume and return the next line."""
+            nonlocal current_pos
+            if current_pos < len(remaining_lines):
+                line = remaining_lines[current_pos]
+                current_pos += 1
+                return line
+            return None
+
+        def process_tag(expected_tag: str, mandatory: bool) -> str | None:
+            """
+            Process a single tag section. Returns the parsed value or None if optional and not
+            present. Stops when the next tag is detected (lookahead, does not consume).
+
+            Args:
+                expected_tag (str):
+                    The tag character to expect ('$', '>', '?', '<')
+                mandatory (bool):
+                    Whether this tag must be present
+
+            Returns:
+                str | None:
+                    The parsed value for this tag, or None if optional and not present
+            """
+            nonlocal previous_system
+
+            peeked = peek_line()
+            if peeked is None:
+                if mandatory:
+                    raise SyntaxError(f"Expected '{expected_tag}' but reached end of file.")
+                return None
+
+            line_number, line = peeked
+
+            # Check if line starts with a tag
+            if not line.startswith(("$", ">", "?", "<")):
+                if mandatory:
+                    raise SyntaxError(
+                        f"Expected '{expected_tag}' at start of line {line_number}."
+                    )
+                return None
+
+            tag_char = line[0]
+
+            # Check if this is the expected tag
+            if tag_char != expected_tag:
+                # Currently only the '?' tag is optional
+                if not mandatory:
+                    # Optional tag not present
+                    return None
+                # For mandatory tags, this is an error
+                raise SyntaxError(
+                    f"Expected '{expected_tag}' but got '{tag_char}' at line {line_number}."
+                )
+
+            # Consume the tag line
+            consume_line()
+
+            # Parse the tag content
+            rest = line[1:]
+            if rest.startswith(" "):
+                rest = rest[1:]
+
+            content_lines = [rest] if rest else []
+
+            # Continue reading lines until we hit the next tag or block delimiter
+            while True:
+                peeked = peek_line()
+                if peeked is None:
+                    break
+                _, next_line = peeked
+                if next_line == "---" or next_line.startswith(("$", ">", "?", "<")):
+                    break
+                consume_line()
+                content_lines.append(next_line)
+
+            # Validate and finalize content
             if not content_lines or all(x == "" for x in content_lines):
-                raise SyntaxError(f"Empty tag '{tag}' detected at line {line_no}.")
+                raise SyntaxError(f"Empty tag '{tag_char}' detected at line {line_number}.")
 
             value = "\n".join(content_lines)
 
-            if tag == "$":
+            # Handle system prompt placeholder
+            if tag_char == "$":
                 if value.strip() == "...":
                     if previous_system is None:
-                        raise SyntaxError("System prompt placeholder '...' without "
-                                          f"preceding system at line {line_no}."
+                        raise SyntaxError(
+                            f"System prompt placeholder '...' without "
+                            f"preceding system at line {line_number}."
                         )
                     value = previous_system
                 else:
                     previous_system = value
 
-            tag_values[tag_idx] = value
-            tag_idx += 1
-            content_lines.clear()
-            return tag_idx, previous_system
+            return value
 
-        for line_number, line in enumerate(lines[1:], start=2):
-            if tag_idx == 3 or line == "---":
-                if current_tag is not None:
-                    tag_idx, previous_system = \
-                        finalize_tag(current_tag, line_number, tag_idx, previous_system)
-                    current_tag = None
-                if line != "---":
-                    raise SyntaxError(f"Missing '---' block delimiter at line {line_number}.")
-                if tag_idx != 3:
-                    raise SyntaxError("Each DSL sample must contain $, > and < in order "
-                                      f"at line {line_number}.")
-                for _idx, _tag in enumerate(["system", "in", "out"]):
-                    flat_data[_tag].append(cast(str, tag_values[_idx]))
-                tag_values[:] = [None, None, None]
-                tag_idx = 0
-                continue
+        # Main parsing loop: process blocks
+        # Note: lines[1:] starts after the first ---, so we process tags directly
+        while current_pos < len(remaining_lines):
+            # Process one complete block: $ > [?] <
+            tag_values[0] = process_tag("$", mandatory=True)
+            tag_values[1] = process_tag(">", mandatory=True)
+            tag_values[2] = process_tag("?", mandatory=False)
+            tag_values[3] = process_tag("<", mandatory=True)
 
-            if line.startswith(("$", ">", "<")):
-                if current_tag is not None:
-                    tag_idx, previous_system = \
-                        finalize_tag(current_tag, line_number, tag_idx, previous_system)
-                    current_tag = None
-                tag_char = line[0]
-                if tag_char != expected_tags[tag_idx]:
-                    role = ["system", "input", "output"][tag_idx]
-                    raise SyntaxError(
-                        f"Expected '{expected_tags[tag_idx]}' at start of {role} line in block "
-                        f"at line {line_number}."
-                    )
-                rest = line[1:]
-                if rest:
-                    if rest.startswith(" "):
-                        rest = rest[1:]
-                    content_lines = [rest]
-                    tag_idx, previous_system = \
-                        finalize_tag(tag_char, line_number, tag_idx, previous_system)
-                else:
-                    current_tag = tag_char
-                    content_lines = []
-                continue
+            # Note: The following check is defensive and should never trigger since
+            # process_tag raises errors for missing mandatory tags. However, it's kept
+            # for additional safety in case of future code changes.
+            if tag_values[0] is None or tag_values[1] is None or tag_values[3] is None:
+                peeked = peek_line()
+                line_num = peeked[0] if peeked else len(lines)
+                raise SyntaxError("Each DSL sample must contain $, > and < in order "
+                                  f"at line {line_num}.")
 
-            if current_tag is None:
-                role = ["system", "input", "output"][tag_idx]
+            # Store the data (fixed indices: 0=system, 1=input, 2=reasoning, 3=output)
+            flat_data["system"].append(tag_values[0])
+            flat_data["in"].append(tag_values[1])
+            flat_data["reasoning"].append(tag_values[2] if tag_values[2] is not None else "")
+            flat_data["out"].append(tag_values[3])
+
+            # Reset for next block
+            tag_values[:] = [None, None, None, None]
+
+            # Check for closing ---
+            peeked = peek_line()
+            if peeked is None:
+                raise SyntaxError(f"DSL sample is not closed properly, last line {len(lines)}")
+
+            closing_line_number, closing_line = peeked
+            if closing_line != "---":
                 raise SyntaxError(
-                    f"Expected '{expected_tags[tag_idx]}' at start of {role} line in block "
-                    f"at line {line_number}."
+                    f"Expected closing '---' but got '{closing_line}' "
+                    f"at line {closing_line_number}."
                 )
+            # Consume the closing ---
+            consume_line()
 
-            content_lines.append(line)
-
-        if current_tag is not None or tag_idx != 0:
-            raise SyntaxError(f"DSL sample is not closed properly, last line {len(lines)}")
+            # Check if there's more content (another block)
+            peeked_next = peek_line()
+            if peeked_next is None:
+                # End of file
+                break
 
         if not previous_system:
-            raise SyntaxError("File must contain at least one explicit"
+            raise SyntaxError("File must contain at least one explicit "
                               "system prompt before using '...'.")
 
         # Pylance: Type of from_dict() is partially unknown
@@ -201,27 +335,27 @@ class DSLAdapter(DatasetAdapter):
     def from_dataset_to_wide_dataset(self, dataset: Dataset) -> Dataset:
         """
         Converts a structured DSL dataset (as 3-message conversations) into a wide-format Dataset
-        with `system`, `in` and `out` fields.
+        with `system`, `in`, `out`, and `reasoning` fields.
 
         Each conversation must contain exactly three messages: a system prompt, a user input (the
         text to be converted into a DSL expression) and an assistant output (the parsed DSL
-        expression).
+        expression). The reasoning field is extracted from assistant.metadata.reasoning if present.
 
         Args:
             dataset (Dataset):
-                A Hugging Face Dataset where each item contains a list of two messages
-                with roles: 'user' and 'assistant'.
+                A Hugging Face Dataset where each item contains a list of three messages
+                with roles: 'system', 'user', and 'assistant'.
 
         Returns:
             Dataset:
-                A wide-format dataset with fields: `system`, `in` (user prompt), `out` (assistant
-                reply).
+                A wide-format dataset with fields: `system`, `in` (user prompt), `reasoning`
+                (optional reasoning content), and `out` (assistant reply).
 
         Raises:
             ValueError:
                 If any conversation is not exactly three messages or roles are incorrect.
         """
-        flat_data: dict[str, list[str]] = {"system": [], "in": [], "out": []}
+        flat_data: dict[str, list[str]] = {"system": [], "in": [], "reasoning": [], "out": []}
 
         for i, structured_record in enumerate(self._iter_structured_records(dataset)):
             messages = structured_record.get("messages")
@@ -233,6 +367,12 @@ class DSLAdapter(DatasetAdapter):
 
             flat_data["system"].append(messages[0]["content"])
             flat_data["in"].append(messages[1]["content"])
+
+            # Extract reasoning from assistant message metadata if present
+            assistant_metadata = messages[2].get("metadata", {})
+            reasoning_content = assistant_metadata.get("reasoning", "")
+            flat_data["reasoning"].append(reasoning_content)
+
             flat_data["out"].append(messages[2]["content"])
 
         # Pylance: Type of from_dict() is partially unknown
@@ -289,6 +429,16 @@ class DSLAdapter(DatasetAdapter):
                 raise ValueError(f"Split '{split}' is missing required "
                                  f"columns: {required_columns - columns}")
 
+            # Add reasoning column if missing (for backward compatibility)
+            if "reasoning" not in columns:
+                # Create a new column with empty strings
+                split_dataset = wide_dataset[split]
+                reasoning_values = [""] * len(split_dataset)
+                # Pylance: Type of add_column() is partially unknown
+                wide_dataset[split] = split_dataset.add_column( # type: ignore[reportUnknownMemberType] # pylint: disable=line-too-long
+                    "reasoning", reasoning_values
+                )
+
         return wide_dataset
 
     def from_wide_dataset_to_json(self, wide_dataset: Dataset) -> JsonConversation:
@@ -297,20 +447,37 @@ class DSLAdapter(DatasetAdapter):
 
         Args:
             wide_dataset (Dataset):
-                Dataset with `system`, `in` and `out` fields.
+                Dataset with `system`, `in`, `reasoning`, and `out` fields.
 
         Returns:
             JsonConversation:
                 A list of dicts with `messages` containing system, user and assistant messages.
+                Reasoning, if present, is stored in the assistant message's `metadata` field.
         """
-        return [
-            {"messages": [
-                {"role": "system", "content": record["system"]},
-                {"role": "user", "content": record["in"]},
-                {"role": "assistant", "content": record["out"]},
-            ]}
-            for record in self._iter_wide_records(wide_dataset)
-        ]
+        result : list[StructuredConversationRecord] = []
+        for record in self._iter_wide_records(wide_dataset):
+            # Build assistant message
+            assistant_msg : StructureMessageRecord = {
+                "role": "assistant",
+                "content": record["out"]
+            }
+
+            # Add reasoning to metadata if present and non-empty
+            reasoning_content = record.get("reasoning", "")
+            if reasoning_content:
+                assistant_msg["metadata"] = {"reasoning": reasoning_content}
+
+            conversation_record : StructuredConversationRecord = {
+                "messages": [
+                    {"role": "system", "content": record["system"]},
+                    {"role": "user", "content": record["in"]},
+                    assistant_msg
+                ]
+            }
+
+            result.append(conversation_record)
+
+        return result
 
     def from_wide_dataset_to_dat(self, wide_dataset: Dataset, dat_filename: str) -> None:
         """
@@ -318,13 +485,14 @@ class DSLAdapter(DatasetAdapter):
 
         Args:
             wide_dataset (Dataset):
-                Dataset with `system`, `in` and `out` fields.
+                Dataset with `system`, `in`, `reasoning`, and `out` fields.
 
             dat_filename (str):
                 Output path for the DAT file.
 
         Consecutive rows with the same system prompt are collapsed using
-        `$ ...` to avoid repetition.
+        `$ ...` to avoid repetition. Reasoning is written as a `?` section
+        between input and output if present.
         """
         def write_section(fh: TextIO, tag: str, text: str) -> None:
             if "\n" in text:
@@ -343,6 +511,12 @@ class DSLAdapter(DatasetAdapter):
                     write_section(f, "$", system_prompt)
                     previous_system = system_prompt
                 write_section(f, ">", record["in"])
+
+                # Write reasoning if present and non-empty
+                reasoning = record.get("reasoning", "")
+                if reasoning:
+                    write_section(f, "?", reasoning)
+
                 write_section(f, "<", record["out"])
                 f.write("---\n")
 
@@ -351,13 +525,14 @@ class DSLAdapter(DatasetAdapter):
         Returns an iterator over a Hugging Face Dataset with each record typed as a dictionary.
 
         This helper function casts each item in the dataset to a `Dict[str, str]` to enable
-        static type checking and clean field access (`record["system"]`, `record["in"]`, 
-        `record["out"]`), which are expected fields in wide-format DSL datasets.
+        static type checking and clean field access (`record["system"]`, `record["in"]`,
+        `record["reasoning"]`, `record["out"]`), which are expected fields in wide-format DSL
+        datasets.
 
         Args:
             dataset (Dataset):
                 A Hugging Face Dataset where each row is expected to contain
-                string fields `"system"`, `"in"` and `"out"`.
+                string fields `"system"`, `"in"`, `"reasoning"`, and `"out"`.
 
         Returns:
             Iterator[Dict[str, str]]:
@@ -368,14 +543,14 @@ class DSLAdapter(DatasetAdapter):
 
     def sort_dat_file(self, dat_filename: str) -> None:
         """
-        Sort a DSL `.dat` file in place by system prompt, input, and output.
+        Sort a DSL `.dat` file in place by system prompt, input, reasoning, and output.
 
         Args:
             dat_filename (str):
                 Path to the `.dat` file to sort. The file is read, parsed into
                 a wide-format dataset, sorted lexicographically by `system`,
-                `in`, and `out` fields, and written back to the same location.
+                `in`, `reasoning`, and `out` fields, and written back to the same location.
         """
         dataset = self.from_dat_to_wide_dataset(dat_filename)
-        sorted_dataset = dataset.sort(["system", "in", "out"])
+        sorted_dataset = dataset.sort(["system", "in", "reasoning", "out"])
         self.from_wide_dataset_to_dat(sorted_dataset, dat_filename)

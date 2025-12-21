@@ -384,7 +384,29 @@ $ You are a precise DSL parser.
 ---
 ```
 
-Multi-line entries are also supported and can be freely mixed with single-line ones.
+#### Reasoning Support
+
+The DSL format optionally supports a `?` (reasoning) section to capture chain-of-thought or intermediate reasoning steps:
+
+```text
+---
+$ You are a precise DSL parser.
+> today at 5:30PM
+?
+base=TODAY
+time.hour=17
+time.minute=30
+< SET_TIME(TODAY, 17, 30)
+---
+```
+
+The `?` section:
+- Is **optional** and appears **between** the `>` (input) and `<` (output) sections
+- Follows the same formatting rules as other sections (single-line or multi-line)
+- Is stored in the wide format under the `reasoning` field
+- Is stored inline in the assistant message's `metadata.reasoning` field in JSON format
+
+Multi-line entries are supported and can be freely mixed with single-line ones.
 A space after the marker on single-line entries is optional:
 
 ```text
@@ -393,6 +415,7 @@ $
 multi-line system
 prompt
 > single-line input
+? single-line reasoning
 <single-line output
 ---
 ```
@@ -425,7 +448,15 @@ Any `$` block that contains only `...` — either directly after the `$` or on t
 
 ```python
 [
-  {"system": "You are a precise DSL parser.", "in": "today at 5:30PM", "out": "SET_TIME(TODAY, 17, 30)"}
+  {"system": "You are a precise DSL parser.", "in": "today at 5:30PM", "reasoning": "", "out": "SET_TIME(TODAY, 17, 30)"}
+]
+```
+
+With reasoning:
+
+```python
+[
+  {"system": "You are a precise DSL parser.", "in": "today at 5:30PM", "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30", "out": "SET_TIME(TODAY, 17, 30)"}
 ]
 ```
 
@@ -438,6 +469,26 @@ Any `$` block that contains only `...` — either directly after the `$` or on t
       {"role": "system", "content": "You are a precise DSL parser."},
       {"role": "user", "content": "today at 5:30PM"},
       {"role": "assistant", "content": "SET_TIME(TODAY, 17, 30)"}
+    ]
+  }
+]
+```
+
+With reasoning:
+
+```python
+[
+  {
+    "messages": [
+      {"role": "system", "content": "You are a precise DSL parser."},
+      {"role": "user", "content": "today at 5:30PM"},
+      {
+        "role": "assistant",
+        "content": "SET_TIME(TODAY, 17, 30)",
+        "metadata": {
+          "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30"
+        }
+      }
     ]
   }
 ]

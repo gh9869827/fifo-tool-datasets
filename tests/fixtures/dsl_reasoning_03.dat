@@ -1,0 +1,6 @@
+---
+$ You are a precise DSL parser.
+> set alarm for 8am
+? Single line reasoning
+< SET_ALARM(TODAY, 8, 0)
+---
