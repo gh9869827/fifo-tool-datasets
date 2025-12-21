@@ -8,27 +8,6 @@ from datasets import (  # type: ignore
     DatasetDict
 )
 
-JsonConversation = list[dict[str, list[dict[str, str]]]]
-"""
-List of conversations in JSON format.
-
-Each conversation is a dictionary with:
-    messages (list[dict[str, str]]): A list of message dictionaries.
-
-Each message dictionary contains:
-    role (str): The role of the speaker ("user", "assistant", "system", or "directives").
-    content (str): The text content of the message.
-
-    example: JsonConversation = [
-        {
-            "messages": [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": "Convert 1200 feet into meters."},
-                {"role": "assistant", "content": "1200 feet is equal to 365.76 meters."}
-            ]
-        }
-    ]
-"""
 
 class StructureMessageRecord(TypedDict):
     """
@@ -62,6 +41,31 @@ class StructuredConversationRecord(TypedDict):
             A list of messages that make up the conversation.
     """
     messages: list[StructureMessageRecord]
+
+
+# List of conversations in JSON format.
+#
+# Each conversation is a dictionary with:
+#     messages (list[StructureMessageRecord]): A list of messages that make up the conversation.
+#
+# Each message dictionary contains:
+#     role (str): The role of the speaker ("user", "assistant", "system", or "directives").
+#     content (str): The text content of the message.
+#     metadata (dict[str, str], optional): Optional metadata associated with the message. This field
+#                                          may be omitted entirely if no metadata is present. It is
+#                                          currently used to store reasoning, when available.
+#
+#     example: JsonConversation = [
+#         {
+#             "messages": [
+#                 {"role": "system", "content": "You are a helpful assistant."},
+#                 {"role": "user", "content": "Convert 1200 feet into meters."},
+#                 {"role": "assistant", "content": "1200 feet is equal to 365.76 meters."}
+#             ]
+#         }
+#     ]
+#
+JsonConversation = list[StructuredConversationRecord]
 
 class DatasetAdapter(ABC):
     """
@@ -419,7 +423,7 @@ class DatasetAdapter(ABC):
         return DatasetDict({
             # Pylance: Type of from_list() is partially unknown
             split: Dataset.from_list(  # type: ignore[reportUnknownMemberType]
-                data
+                cast(list[dict[str, str | dict[str, str]]], data)
             )
             for split, data in json_splits.items()
         })
@@ -441,8 +445,11 @@ class DatasetAdapter(ABC):
         """
         # Pylance: Type of from_list() is partially unknown
         return Dataset.from_list(  # type: ignore[reportUnknownMemberType]
-            self.from_wide_dataset_to_json(
-                self.from_dat_to_wide_dataset(filename)
+            cast(
+                list[dict[str, str | dict[str, str]]],
+                self.from_wide_dataset_to_json(
+                    self.from_dat_to_wide_dataset(filename)
+                )
             )
         )
 

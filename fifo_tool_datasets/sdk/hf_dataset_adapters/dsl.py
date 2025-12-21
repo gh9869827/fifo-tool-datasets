@@ -4,7 +4,12 @@ from datasets import (  # type: ignore
     DatasetDict,
     load_dataset  # type: ignore[reportUnknownVariableType]
 )
-from .common import DatasetAdapter, JsonConversation
+from .common import (
+    DatasetAdapter,
+    JsonConversation,
+    StructureMessageRecord,
+    StructuredConversationRecord
+)
 
 class DSLAdapter(DatasetAdapter):
     """
@@ -446,10 +451,10 @@ class DSLAdapter(DatasetAdapter):
                 A list of dicts with `messages` containing system, user and assistant messages.
                 Reasoning, if present, is stored in the assistant message's `metadata` field.
         """
-        result = []
+        result : list[StructuredConversationRecord] = []
         for record in self._iter_wide_records(wide_dataset):
             # Build assistant message
-            assistant_msg = {
+            assistant_msg : StructureMessageRecord = {
                 "role": "assistant",
                 "content": record["out"]
             }
@@ -458,15 +463,17 @@ class DSLAdapter(DatasetAdapter):
             reasoning_content = record.get("reasoning", "")
             if reasoning_content:
                 assistant_msg["metadata"] = {"reasoning": reasoning_content}
-            
-            messages = [
-                {"role": "system", "content": record["system"]},
-                {"role": "user", "content": record["in"]},
-                assistant_msg
-            ]
-            
-            result.append({"messages": messages})
-        
+
+            conversation_record : StructuredConversationRecord = {
+                "messages": [
+                    {"role": "system", "content": record["system"]},
+                    {"role": "user", "content": record["in"]},
+                    assistant_msg
+                ]
+            }
+
+            result.append(conversation_record)
+
         return result
 
     def from_wide_dataset_to_dat(self, wide_dataset: Dataset, dat_filename: str) -> None:

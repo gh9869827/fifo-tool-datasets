@@ -1,5 +1,5 @@
 import re
-from typing import Dict, Iterator, Literal, TypedDict, cast
+from typing import Iterator, Literal, TypedDict, cast
 # Pylance: suppress missing type stub warning for datasets
 from datasets import (  # type: ignore
     Dataset,
@@ -7,7 +7,7 @@ from datasets import (  # type: ignore
     # Pylance: Type of load_dataset is partially unknown
     load_dataset  # type: ignore[reportUnknownVariableType]
 )
-from .common import DatasetAdapter, JsonConversation
+from .common import DatasetAdapter, JsonConversation, StructureMessageRecord
 
 Role = Literal[
     "system",
@@ -346,7 +346,7 @@ class ConversationAdapter(DatasetAdapter):
 
         id_conversation = -1
         conversations: JsonConversation = []
-        messages: list[Dict[str, str]] = []
+        messages: list[StructureMessageRecord] = []
         for record in self._iter_wide_records(sorted_wide_dataset):
             if record["id_conversation"] != id_conversation:
                 id_conversation = record["id_conversation"]
