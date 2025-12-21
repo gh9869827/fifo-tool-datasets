@@ -27,8 +27,9 @@ class DSLAdapter(DatasetAdapter):
 
     Multi-line entries are supported and can be freely mixed with single-line entries. You can write
     a multi-line value in two ways:
-    
-    1. Place the marker on its own line (e.g., just `$`, `>`, `?`, or `<`), followed by the content block:
+
+    1. Place the marker on its own line (e.g., just `$`, `>`, `?`, or `<`), followed by the content
+       block:
         ---
         $
         <system_prompt line 1>
@@ -53,9 +54,9 @@ class DSLAdapter(DatasetAdapter):
         < <dsl_output>
         ---
 
-    Each block (`$`, `>`, `?`, `<`) supports multi-line values using either style. The parser automatically
-    detects and parses both formats. The `?` (reasoning) section is optional and appears between
-    the `>` (input) and `<` (output) sections when present.
+    Each block (`$`, `>`, `?`, `<`) supports multi-line values using either style. The parser
+    automatically detects and parses both formats. The `?` (reasoning) section is optional and
+    appears between the `>` (input) and `<` (output) sections when present.
 
     To avoid repeating the same system prompt across many samples, a `$` section
     may contain only `...`. This placeholder indicates that the system prompt is
@@ -165,17 +166,17 @@ class DSLAdapter(DatasetAdapter):
         # Fixed indices: 0=system, 1=input, 2=reasoning, 3=output
         tag_values: list[str | None] = [None, None, None, None]
         previous_system: str | None = None
-        
+
         # Convert to list for easier iteration with lookahead
         remaining_lines = list(enumerate(lines[1:], start=2))
         current_pos = 0
-        
+
         def peek_line() -> tuple[int, str] | None:
             """Peek at the next line without consuming it."""
             if current_pos < len(remaining_lines):
                 return remaining_lines[current_pos]
             return None
-        
+
         def consume_line() -> tuple[int, str] | None:
             """Consume and return the next line."""
             nonlocal current_pos
@@ -184,32 +185,32 @@ class DSLAdapter(DatasetAdapter):
                 current_pos += 1
                 return line
             return None
-        
+
         def process_tag(expected_tag: str, mandatory: bool) -> str | None:
             """
-            Process a single tag section. Returns the parsed value or None if optional and not present.
-            Stops when the next tag is detected (lookahead, does not consume).
-            
+            Process a single tag section. Returns the parsed value or None if optional and not
+            present. Stops when the next tag is detected (lookahead, does not consume).
+
             Args:
                 expected_tag (str):
                     The tag character to expect ('$', '>', '?', '<')
                 mandatory (bool):
                     Whether this tag must be present
-            
+
             Returns:
                 str | None:
                     The parsed value for this tag, or None if optional and not present
             """
             nonlocal previous_system
-            
+
             peeked = peek_line()
             if peeked is None:
                 if mandatory:
                     raise SyntaxError(f"Expected '{expected_tag}' but reached end of file.")
                 return None
-            
+
             line_number, line = peeked
-            
+
             # Check if line starts with a tag
             if not line.startswith(("$", ">", "?", "<")):
                 if mandatory:
@@ -217,9 +218,9 @@ class DSLAdapter(DatasetAdapter):
                         f"Expected '{expected_tag}' at start of line {line_number}."
                     )
                 return None
-            
+
             tag_char = line[0]
-            
+
             # Check if this is the expected tag
             if tag_char != expected_tag:
                 # Currently only the '?' tag is optional
@@ -230,17 +231,17 @@ class DSLAdapter(DatasetAdapter):
                 raise SyntaxError(
                     f"Expected '{expected_tag}' but got '{tag_char}' at line {line_number}."
                 )
-            
+
             # Consume the tag line
             consume_line()
-            
+
             # Parse the tag content
             rest = line[1:]
             if rest.startswith(" "):
                 rest = rest[1:]
-            
+
             content_lines = [rest] if rest else []
-            
+
             # Continue reading lines until we hit the next tag or block delimiter
             while True:
                 peeked = peek_line()
@@ -251,13 +252,13 @@ class DSLAdapter(DatasetAdapter):
                     break
                 consume_line()
                 content_lines.append(next_line)
-            
+
             # Validate and finalize content
             if not content_lines or all(x == "" for x in content_lines):
                 raise SyntaxError(f"Empty tag '{tag_char}' detected at line {line_number}.")
-            
+
             value = "\n".join(content_lines)
-            
+
             # Handle system prompt placeholder
             if tag_char == "$":
                 if value.strip() == "...":
@@ -269,9 +270,9 @@ class DSLAdapter(DatasetAdapter):
                     value = previous_system
                 else:
                     previous_system = value
-            
+
             return value
-        
+
         # Main parsing loop: process blocks
         # Note: lines[1:] starts after the first ---, so we process tags directly
         while current_pos < len(remaining_lines):
@@ -280,7 +281,7 @@ class DSLAdapter(DatasetAdapter):
             tag_values[1] = process_tag(">", mandatory=True)
             tag_values[2] = process_tag("?", mandatory=False)
             tag_values[3] = process_tag("<", mandatory=True)
-            
+
             # Note: The following check is defensive and should never trigger since
             # process_tag raises errors for missing mandatory tags. However, it's kept
             # for additional safety in case of future code changes.
@@ -289,29 +290,30 @@ class DSLAdapter(DatasetAdapter):
                 line_num = peeked[0] if peeked else len(lines)
                 raise SyntaxError("Each DSL sample must contain $, > and < in order "
                                   f"at line {line_num}.")
-            
+
             # Store the data (fixed indices: 0=system, 1=input, 2=reasoning, 3=output)
             flat_data["system"].append(tag_values[0])  # type: ignore[arg-type]
             flat_data["in"].append(tag_values[1])  # type: ignore[arg-type]
             flat_data["reasoning"].append(tag_values[2] if tag_values[2] is not None else "")
             flat_data["out"].append(tag_values[3])  # type: ignore[arg-type]
-            
+
             # Reset for next block
             tag_values[:] = [None, None, None, None]
-            
+
             # Check for closing ---
             peeked = peek_line()
             if peeked is None:
                 raise SyntaxError(f"DSL sample is not closed properly, last line {len(lines)}")
-            
+
             closing_line_number, closing_line = peeked
             if closing_line != "---":
                 raise SyntaxError(
-                    f"Expected closing '---' but got '{closing_line}' at line {closing_line_number}."
+                    f"Expected closing '---' but got '{closing_line}' "
+                    f"at line {closing_line_number}."
                 )
             # Consume the closing ---
             consume_line()
-            
+
             # Check if there's more content (another block)
             peeked_next = peek_line()
             if peeked_next is None:
@@ -360,12 +362,12 @@ class DSLAdapter(DatasetAdapter):
 
             flat_data["system"].append(messages[0]["content"])
             flat_data["in"].append(messages[1]["content"])
-            
+
             # Extract reasoning from assistant message metadata if present
             assistant_metadata = messages[2].get("metadata", {})
             reasoning_content = assistant_metadata.get("reasoning", "")
             flat_data["reasoning"].append(reasoning_content)
-            
+
             flat_data["out"].append(messages[2]["content"])
 
         # Pylance: Type of from_dict() is partially unknown
@@ -421,7 +423,7 @@ class DSLAdapter(DatasetAdapter):
             if not required_columns.issubset(columns):
                 raise ValueError(f"Split '{split}' is missing required "
                                  f"columns: {required_columns - columns}")
-            
+
             # Add reasoning column if missing (for backward compatibility)
             if "reasoning" not in columns:
                 # Create a new column with empty strings
@@ -451,7 +453,7 @@ class DSLAdapter(DatasetAdapter):
                 "role": "assistant",
                 "content": record["out"]
             }
-            
+
             # Add reasoning to metadata if present and non-empty
             reasoning_content = record.get("reasoning", "")
             if reasoning_content:
@@ -499,12 +501,12 @@ class DSLAdapter(DatasetAdapter):
                     write_section(f, "$", system_prompt)
                     previous_system = system_prompt
                 write_section(f, ">", record["in"])
-                
+
                 # Write reasoning if present and non-empty
                 reasoning = record.get("reasoning", "")
                 if reasoning:
                     write_section(f, "?", reasoning)
-                
+
                 write_section(f, "<", record["out"])
                 f.write("---\n")
 
@@ -513,8 +515,9 @@ class DSLAdapter(DatasetAdapter):
         Returns an iterator over a Hugging Face Dataset with each record typed as a dictionary.
 
         This helper function casts each item in the dataset to a `Dict[str, str]` to enable
-        static type checking and clean field access (`record["system"]`, `record["in"]`, 
-        `record["reasoning"]`, `record["out"]`), which are expected fields in wide-format DSL datasets.
+        static type checking and clean field access (`record["system"]`, `record["in"]`,
+        `record["reasoning"]`, `record["out"]`), which are expected fields in wide-format DSL
+        datasets.
 
         Args:
             dataset (Dataset):
