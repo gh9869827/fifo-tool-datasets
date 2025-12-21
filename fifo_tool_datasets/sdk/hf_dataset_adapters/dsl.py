@@ -368,8 +368,9 @@ class DSLAdapter(DatasetAdapter):
             flat_data["system"].append(messages[0]["content"])
             flat_data["in"].append(messages[1]["content"])
 
-            # Extract reasoning from assistant message metadata if present
-            assistant_metadata = messages[2].get("metadata", {})
+            # Extract reasoning from assistant message metadata if present.
+            # Note: due to Arrow schema unification, `metadata` may be `None` when absent.
+            assistant_metadata = messages[2].get("metadata") or {}
             reasoning_content = assistant_metadata.get("reasoning", "")
             flat_data["reasoning"].append(reasoning_content)
 
