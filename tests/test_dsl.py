@@ -9,6 +9,7 @@ from datasets import (  # type: ignore
     DatasetDict
 )
 from fifo_tool_datasets.sdk.hf_dataset_adapters.common import (
+    JsonConversation,
     StructuredConversationRecord
 )
 from fifo_tool_datasets.sdk.hf_dataset_adapters.dsl import (
@@ -381,7 +382,7 @@ def test_from_dat_to_wide_dataset_with_reasoning() -> None:
 
     assert isinstance(dataset, Dataset)
     # Pylance: Type of to_list() is partially unknown
-    result = dataset.to_list()  # type: ignore[reportUnknownMemberType]
+    result: list[Any] = dataset.to_list()  # type: ignore[reportUnknownMemberType]
     assert len(result) == 1
     assert result[0] == {
         "system": "You are a precise DSL parser.",
@@ -399,7 +400,7 @@ def test_from_dat_to_wide_dataset_mixed_reasoning() -> None:
 
     assert isinstance(dataset, Dataset)
     # Pylance: Type of to_list() is partially unknown
-    result = dataset.to_list()  # type: ignore[reportUnknownMemberType]
+    result: list[Any] = dataset.to_list()  # type: ignore[reportUnknownMemberType]
     assert len(result) == 2
     assert result[0] == {
         "system": "You are a precise DSL parser.",
@@ -423,7 +424,7 @@ def test_from_dat_to_wide_dataset_single_line_reasoning() -> None:
 
     assert isinstance(dataset, Dataset)
     # Pylance: Type of to_list() is partially unknown
-    result = dataset.to_list()  # type: ignore[reportUnknownMemberType]
+    result: list[Any] = dataset.to_list()  # type: ignore[reportUnknownMemberType]
     assert len(result) == 1
     assert result[0] == {
         "system": "You are a precise DSL parser.",
@@ -562,7 +563,7 @@ def test_from_dataset_to_wide_dataset_with_reasoning() -> None:
     """Test conversion from structured format with reasoning to wide format."""
     adapter = DSLAdapter()
 
-    structured_data = [
+    structured_data: JsonConversation = [
         {
             "messages": [
                 {"role": "system", "content": "You are a precise DSL parser."},
@@ -587,7 +588,7 @@ def test_from_dataset_to_wide_dataset_with_reasoning() -> None:
 
     assert wide_dataset.column_names == ["system", "in", "reasoning", "out"]
     # Pylance: Type of to_list() is partially unknown
-    result = wide_dataset.to_list()  # type: ignore[reportUnknownMemberType]
+    result: list[Any] = wide_dataset.to_list()  # type: ignore[reportUnknownMemberType]
     assert len(result) == 1
     assert result[0] == {
         "system": "You are a precise DSL parser.",
@@ -601,11 +602,11 @@ def test_multiline_with_content_on_same_line() -> None:
     """Test parsing multi-line sections where content starts on the same line as the tag."""
     adapter = DSLAdapter()
     path = pathlib.Path(__file__).parent / "fixtures" / "dsl_multiline_sameline.dat"
-    
+
     dataset = adapter.from_dat_to_wide_dataset(str(path))
-    
+
     # Pylance: Type of to_list() is partially unknown
-    result = dataset.to_list()  # type: ignore[reportUnknownMemberType]
+    result: list[Any] = dataset.to_list()  # type: ignore[reportUnknownMemberType]
     assert len(result) == 1
     assert result[0] == {
         "system": "You are a precise DSL parser.\nLine 2 of system prompt",
