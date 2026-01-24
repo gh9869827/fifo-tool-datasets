@@ -73,7 +73,7 @@ class DSLAdapter(DatasetAdapter):
     Wide-format dataset fields:
         - system (str): system prompt (can be reused or unique)
         - in (str): user input string
-        - reasoning (str): optional reasoning content (empty string if not present)
+        - reasoning (str): optional reasoning content (only present if at least one record has reasoning)
         - out (str): expected DSL output string
 
     Example `.dat` file with reasoning:
@@ -108,7 +108,6 @@ class DSLAdapter(DatasetAdapter):
             {
                 "system": "You are a precise DSL parser.",
                 "in": "set alarm tomorrow at 7am",
-                "reasoning": "",
                 "out": "SET_ALARM(TOMORROW, 7, 0)"
             }
         ]
@@ -152,7 +151,8 @@ class DSLAdapter(DatasetAdapter):
 
         Returns:
             Dataset:
-                A Dataset with four fields: `system`, `in`, `reasoning`, and `out`.
+                A Dataset with three or four fields: `system`, `in`, and `out`, plus
+                `reasoning` (only present if at least one record has reasoning content).
 
         Raises:
             SyntaxError: If the file is malformed (e.g. unpaired question/answer).
@@ -339,7 +339,7 @@ class DSLAdapter(DatasetAdapter):
     def from_dataset_to_wide_dataset(self, dataset: Dataset) -> Dataset:
         """
         Converts a structured DSL dataset (as 3-message conversations) into a wide-format Dataset
-        with `system`, `in`, `out`, and `reasoning` fields.
+        with `system`, `in`, and `out` fields, plus `reasoning` if at least one record has it.
 
         Each conversation must contain exactly three messages: a system prompt, a user input (the
         text to be converted into a DSL expression) and an assistant output (the parsed DSL
@@ -352,8 +352,8 @@ class DSLAdapter(DatasetAdapter):
 
         Returns:
             Dataset:
-                A wide-format dataset with fields: `system`, `in` (user prompt), `reasoning`
-                (optional reasoning content), and `out` (assistant reply).
+                A wide-format dataset with fields: `system`, `in`, and `out`, plus `reasoning`
+                (only present if at least one record has reasoning content).
 
         Raises:
             ValueError:
@@ -465,7 +465,8 @@ class DSLAdapter(DatasetAdapter):
 
         Args:
             wide_dataset (Dataset):
-                Dataset with `system`, `in`, `reasoning`, and `out` fields.
+                Dataset with `system`, `in`, and `out` fields. May optionally include
+                `reasoning` field if at least one record has reasoning content.
 
         Returns:
             JsonConversation:
@@ -503,14 +504,15 @@ class DSLAdapter(DatasetAdapter):
 
         Args:
             wide_dataset (Dataset):
-                Dataset with `system`, `in`, `reasoning`, and `out` fields.
+                Dataset with `system`, `in`, and `out` fields. May optionally include
+                `reasoning` field if at least one record has reasoning content.
 
             dat_filename (str):
                 Output path for the DAT file.
 
         Consecutive rows with the same system prompt are collapsed using
         `$ ...` to avoid repetition. Reasoning is written as a `?` section
-        between input and output if present.
+        between input and output if present and non-empty.
         """
         def write_section(fh: TextIO, tag: str, text: str) -> None:
             if "\n" in text:
@@ -544,13 +546,14 @@ class DSLAdapter(DatasetAdapter):
 
         This helper function casts each item in the dataset to a `Dict[str, str]` to enable
         static type checking and clean field access (`record["system"]`, `record["in"]`,
-        `record["reasoning"]`, `record["out"]`), which are expected fields in wide-format DSL
-        datasets.
+        `record["out"]`, and optionally `record.get("reasoning", "")`). The `reasoning` field
+        may or may not be present in the dataset depending on whether any record contains reasoning.
 
         Args:
             dataset (Dataset):
                 A Hugging Face Dataset where each row is expected to contain
-                string fields `"system"`, `"in"`, `"reasoning"`, and `"out"`.
+                string fields `"system"`, `"in"`, and `"out"`. May optionally include
+                `"reasoning"` field if at least one record has reasoning content.
 
         Returns:
             Iterator[Dict[str, str]]:

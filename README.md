@@ -448,7 +448,7 @@ Any `$` block that contains only `...` — either directly after the `$` or on t
 
 ```python
 [
-  {"system": "You are a precise DSL parser.", "in": "today at 5:30PM", "reasoning": "", "out": "SET_TIME(TODAY, 17, 30)"}
+  {"system": "You are a precise DSL parser.", "in": "today at 5:30PM", "out": "SET_TIME(TODAY, 17, 30)"}
 ]
 ```
 

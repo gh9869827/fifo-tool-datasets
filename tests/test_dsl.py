@@ -603,3 +603,64 @@ def test_multiline_with_content_on_same_line() -> None:
         "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30",
         "out": "SET_TIME(TODAY, 17, 30)"
     }
+
+
+def test_from_dat_to_wide_dataset_without_reasoning_column() -> None:
+    """Test that reasoning column is omitted when all records have no reasoning."""
+    adapter = DSLAdapter()
+    path = pathlib.Path(__file__).parent / "fixtures" / "dsl_01.dat"
+    dataset = adapter.from_dat_to_wide_dataset(str(path))
+    
+    # Verify reasoning column does not exist
+    assert "reasoning" not in dataset.column_names
+    assert dataset.column_names == ["system", "in", "out"]
+
+
+def test_roundtrip_without_reasoning_column() -> None:
+    """Test roundtrip conversion: .dat (no reasoning) → wide (no column) → .dat"""
+    adapter = DSLAdapter()
+    path = pathlib.Path(__file__).parent / "fixtures" / "dsl_01.dat"
+    
+    # Load .dat → wide (should not have reasoning column)
+    wide_dataset = adapter.from_dat_to_wide_dataset(str(path))
+    assert "reasoning" not in wide_dataset.column_names
+    
+    # Write wide → .dat
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = pathlib.Path(tmpdir) / "test.dat"
+        adapter.from_wide_dataset_to_dat(wide_dataset, str(tmp_path))
+        
+        # Load again
+        wide_dataset2 = adapter.from_dat_to_wide_dataset(str(tmp_path))
+    
+    # Verify column still absent and data matches
+    assert "reasoning" not in wide_dataset2.column_names
+    # Pylance: Type of to_list() is partially unknown
+    assert wide_dataset.to_list() == wide_dataset2.to_list()  # type: ignore[reportUnknownMemberType]
+
+
+def test_sort_dat_file_without_reasoning() -> None:
+    """Test sorting .dat file that has no reasoning sections."""
+    adapter = DSLAdapter()
+    
+    # Create unsorted .dat without reasoning
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = pathlib.Path(tmpdir) / "test.dat"
+        # Write some unsorted data
+        # Pylance: Type of from_dict() is partially unknown
+        dataset = Dataset.from_dict({  # type: ignore[reportUnknownMemberType]
+            "system": ["prompt1", "prompt1"],
+            "in": ["b", "a"],
+            "out": ["out2", "out1"]
+        })
+        adapter.from_wide_dataset_to_dat(dataset, str(tmp_path))
+        
+        # Sort the file
+        adapter.sort_dat_file(str(tmp_path))
+        
+        # Verify sorted
+        sorted_dataset = adapter.from_dat_to_wide_dataset(str(tmp_path))
+        # Pylance: Type of to_list() is partially unknown
+        result = sorted_dataset.to_list()  # type: ignore[reportUnknownMemberType]
+        assert result[0]["in"] == "a"
+        assert result[1]["in"] == "b"
