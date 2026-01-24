@@ -329,6 +329,10 @@ class DSLAdapter(DatasetAdapter):
             raise SyntaxError("File must contain at least one explicit "
                               "system prompt before using '...'.")
 
+        # Check if all reasoning values are empty, and if so, drop the column
+        if all(r == "" for r in flat_data["reasoning"]):
+            del flat_data["reasoning"]
+
         # Pylance: Type of from_dict() is partially unknown
         return Dataset.from_dict(flat_data) # type: ignore[reportUnknownMemberType]
 
@@ -375,6 +379,10 @@ class DSLAdapter(DatasetAdapter):
             flat_data["reasoning"].append(reasoning_content)
 
             flat_data["out"].append(messages[2]["content"])
+
+        # Check if all reasoning values are empty, and if so, drop the column
+        if all(r == "" for r in flat_data["reasoning"]):
+            del flat_data["reasoning"]
 
         # Pylance: Type of from_dict() is partially unknown
         return Dataset.from_dict(flat_data)  # type: ignore[reportUnknownMemberType]
@@ -430,7 +438,8 @@ class DSLAdapter(DatasetAdapter):
                 raise ValueError(f"Split '{split}' is missing required "
                                  f"columns: {required_columns - columns}")
 
-            # Add reasoning column if missing (for backward compatibility)
+            # Add reasoning column if missing (for backward compatibility with older datasets)
+            # After adding it, check if all values are empty and drop it if so
             if "reasoning" not in columns:
                 # Create a new column with empty strings
                 split_dataset = wide_dataset[split]
@@ -439,6 +448,14 @@ class DSLAdapter(DatasetAdapter):
                 wide_dataset[split] = split_dataset.add_column( # type: ignore[reportUnknownMemberType] # pylint: disable=line-too-long
                     "reasoning", reasoning_values
                 )
+            
+            # Check if all reasoning values are empty and drop the column to keep layout compact
+            split_dataset = wide_dataset[split]
+            if "reasoning" in split_dataset.column_names:
+                reasoning_values = split_dataset["reasoning"]
+                if all(r == "" for r in reasoning_values):
+                    # Remove the column using remove_columns
+                    wide_dataset[split] = split_dataset.remove_columns(["reasoning"])
 
         return wide_dataset
 
@@ -553,5 +570,9 @@ class DSLAdapter(DatasetAdapter):
                 `in`, `reasoning`, and `out` fields, and written back to the same location.
         """
         dataset = self.from_dat_to_wide_dataset(dat_filename)
-        sorted_dataset = dataset.sort(["system", "in", "reasoning", "out"])
+        sort_keys = ["system", "in"]
+        if "reasoning" in dataset.column_names:
+            sort_keys.append("reasoning")
+        sort_keys.append("out")
+        sorted_dataset = dataset.sort(sort_keys)
         self.from_wide_dataset_to_dat(sorted_dataset, dat_filename)
