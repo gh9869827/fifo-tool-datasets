@@ -610,7 +610,7 @@ def test_from_dat_to_wide_dataset_without_reasoning_column() -> None:
     adapter = DSLAdapter()
     path = pathlib.Path(__file__).parent / "fixtures" / "dsl_01.dat"
     dataset = adapter.from_dat_to_wide_dataset(str(path))
-    
+
     # Verify reasoning column does not exist
     assert "reasoning" not in dataset.column_names
     assert dataset.column_names == ["system", "in", "out"]
@@ -620,7 +620,7 @@ def test_roundtrip_without_reasoning_column() -> None:
     """Test roundtrip conversion: .dat (no reasoning) → wide (no column) → .dat"""
     adapter = DSLAdapter()
     path = pathlib.Path(__file__).parent / "fixtures" / "dsl_01.dat"
-    
+
     # Load .dat → wide (should not have reasoning column)
     wide_dataset = adapter.from_dat_to_wide_dataset(str(path))
     assert "reasoning" not in wide_dataset.column_names

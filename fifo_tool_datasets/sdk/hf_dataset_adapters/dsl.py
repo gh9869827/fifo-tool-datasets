@@ -450,7 +450,7 @@ class DSLAdapter(DatasetAdapter):
                 wide_dataset[split] = split_dataset.add_column( # type: ignore[reportUnknownMemberType] # pylint: disable=line-too-long
                     "reasoning", reasoning_values
                 )
-            
+
             # Check if all reasoning values are empty and drop the column to keep layout compact.
             # This optimization applies to both old datasets (after adding the column above) and
             # new datasets that may already have an empty reasoning column.
