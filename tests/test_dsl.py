@@ -642,7 +642,7 @@ def test_roundtrip_without_reasoning_column() -> None:
 def test_sort_dat_file_without_reasoning() -> None:
     """Test sorting .dat file that has no reasoning sections."""
     adapter = DSLAdapter()
-    
+
     # Create unsorted .dat without reasoning
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = pathlib.Path(tmpdir) / "test.dat"
@@ -654,10 +654,10 @@ def test_sort_dat_file_without_reasoning() -> None:
             "out": ["out2", "out1"]
         })
         adapter.from_wide_dataset_to_dat(dataset, str(tmp_path))
-        
+
         # Sort the file
         adapter.sort_dat_file(str(tmp_path))
-        
+
         # Verify sorted
         sorted_dataset = adapter.from_dat_to_wide_dataset(str(tmp_path))
         # Pylance: Type of to_list() is partially unknown
