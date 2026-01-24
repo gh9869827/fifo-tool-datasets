@@ -438,24 +438,11 @@ class DSLAdapter(DatasetAdapter):
                 raise ValueError(f"Split '{split}' is missing required "
                                  f"columns: {required_columns - columns}")
 
-            # Add reasoning column if missing (for backward compatibility with datasets
-            # uploaded to the Hub before the reasoning column optimization was implemented)
-            # After adding it, check if all values are empty and drop it if so to maintain
-            # a consistent compact layout regardless of whether the dataset is old or new
-            if "reasoning" not in columns:
-                # Create a new column with empty strings
+            # Check if reasoning column exists and all values are empty, then drop it to keep layout compact.
+            # Old Hub datasets that never had a reasoning column will remain without one (backward compatible).
+            # New Hub datasets with all-empty reasoning will have the column removed for a compact layout.
+            if "reasoning" in columns:
                 split_dataset = wide_dataset[split]
-                reasoning_values = [""] * len(split_dataset)
-                # Pylance: Type of add_column() is partially unknown
-                wide_dataset[split] = split_dataset.add_column( # type: ignore[reportUnknownMemberType] # pylint: disable=line-too-long
-                    "reasoning", reasoning_values
-                )
-
-            # Check if all reasoning values are empty and drop the column to keep layout compact.
-            # This optimization applies to both old datasets (after adding the column above) and
-            # new datasets that may already have an empty reasoning column.
-            split_dataset = wide_dataset[split]
-            if "reasoning" in split_dataset.column_names:
                 reasoning_values = split_dataset["reasoning"]
                 if all(r == "" for r in reasoning_values):
                     # Remove the column using remove_columns
