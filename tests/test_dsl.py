@@ -624,15 +624,15 @@ def test_roundtrip_without_reasoning_column() -> None:
     # Load .dat → wide (should not have reasoning column)
     wide_dataset = adapter.from_dat_to_wide_dataset(str(path))
     assert "reasoning" not in wide_dataset.column_names
-    
+
     # Write wide → .dat
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = pathlib.Path(tmpdir) / "test.dat"
         adapter.from_wide_dataset_to_dat(wide_dataset, str(tmp_path))
-        
+
         # Load again
         wide_dataset2 = adapter.from_dat_to_wide_dataset(str(tmp_path))
-    
+
     # Verify column still absent and data matches
     assert "reasoning" not in wide_dataset2.column_names
     # Pylance: Type of to_list() is partially unknown
