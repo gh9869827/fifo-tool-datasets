@@ -17,12 +17,12 @@ from fifo_tool_datasets.sdk.hf_dataset_adapters.dsl import (
 )
 
 EXPECTED_DSL_01_WIDE: list[dict[str, str]] = [
-    {"system": "System prompt #1", "in": "in #1", "reasoning": "", "out": "out #1"}
+    {"system": "System prompt #1", "in": "in #1", "out": "out #1"}
 ]
 
 EXPECTED_DSL_02_WIDE: list[dict[str, str]] = [
-    {"system": "System prompt #1", "in": "in #1", "reasoning": "", "out": "out #1"},
-    {"system": "System prompt #2", "in": "in #2", "reasoning": "", "out": "out #2"}
+    {"system": "System prompt #1", "in": "in #1", "out": "out #1"},
+    {"system": "System prompt #2", "in": "in #2", "out": "out #2"}
 ]
 
 EXPECTED_DSL_03_WIDE: list[dict[str, str]] = [
@@ -32,35 +32,31 @@ EXPECTED_DSL_03_WIDE: list[dict[str, str]] = [
             "It is optional when reading a file. But when generating a dat file, always add it."
         ),
         "in": "only one line. Same note as above about the blank.",
-        "reasoning": "",
         "out": "only one line. Same note as above about the blank.",
     },
     {
         "system": "when multi lines\nare needed it is formatted\nlike that",
         "in": "only one line. Same note as above about the blank.",
-        "reasoning": "",
         "out": "only one line. Same note as above about the blank.",
     },
     {
         "system": "still one line.",
         "in": "one line\nand\nanother here",
-        "reasoning": "",
         "out": "but only one here is supported, i.e. one record with single vs multi lines.",
     },
     {
         "system": "line 1\nline 2",
         "in": "user input 1\nuser input 2",
-        "reasoning": "",
         "out": "dsl output 1\ndsl output 2",
     },
 ]
 
 EXPECTED_DSL_04_WIDE: list[dict[str, str]] = [
-    {"system": "Sys #1", "in": "in #1", "reasoning": "", "out": "out #1"},
-    {"system": "Sys #1", "in": "in #2", "reasoning": "", "out": "out #2"},
-    {"system": "Sys multi\nline", "in": "in #3", "reasoning": "", "out": "out #3"},
-    {"system": "Sys multi\nline", "in": "in #4", "reasoning": "", "out": "out #4"},
-    {"system": "Sys multi\nline", "in": "in #5", "reasoning": "", "out": "out #5"},
+    {"system": "Sys #1", "in": "in #1", "out": "out #1"},
+    {"system": "Sys #1", "in": "in #2", "out": "out #2"},
+    {"system": "Sys multi\nline", "in": "in #3", "out": "out #3"},
+    {"system": "Sys multi\nline", "in": "in #4", "out": "out #4"},
+    {"system": "Sys multi\nline", "in": "in #5", "out": "out #5"},
 ]
 
 EXPECTED_DSL_01_STRUCTURED = [
@@ -300,17 +296,10 @@ def test_from_dataset_to_wide_dataset_dsl(
 
     wide_dataset = adapter.from_dataset_to_wide_dataset(structured_dataset)
 
-    assert wide_dataset.column_names == ["system", "in", "reasoning", "out"]
+    assert wide_dataset.column_names == ["system", "in", "out"]
     assert len(wide_dataset) == len(expected_wide)
     for i, expected in enumerate(expected_wide):
-        # Build expected dict with correct field order
-        expected_with_reasoning = {
-            "system": expected["system"],
-            "in": expected["in"],
-            "reasoning": "",
-            "out": expected["out"]
-        }
-        assert wide_dataset[i] == expected_with_reasoning
+        assert wide_dataset[i] == expected
 
 
 def test_from_hub_to_dataset_wide_dict_success() -> None:
@@ -366,9 +355,9 @@ $ b
     sorted_ds = adapter.from_dat_to_wide_dataset(str(dat_path))
     # Pylance: Type of to_list() is partially unknown
     assert sorted_ds.to_list() == [  # type: ignore[reportUnknownMemberType]
-        {"system": "a", "in": "q1", "reasoning": "", "out": "a1"},
-        {"system": "b", "in": "q1", "reasoning": "", "out": "a0"},
-        {"system": "b", "in": "q2", "reasoning": "", "out": "a2"},
+        {"system": "a", "in": "q1", "out": "a1"},
+        {"system": "b", "in": "q1", "out": "a0"},
+        {"system": "b", "in": "q2", "out": "a2"},
     ]
 
 
@@ -614,3 +603,64 @@ def test_multiline_with_content_on_same_line() -> None:
         "reasoning": "base=TODAY\ntime.hour=17\ntime.minute=30",
         "out": "SET_TIME(TODAY, 17, 30)"
     }
+
+
+def test_from_dat_to_wide_dataset_without_reasoning_column() -> None:
+    """Test that reasoning column is omitted when all records have no reasoning."""
+    adapter = DSLAdapter()
+    path = pathlib.Path(__file__).parent / "fixtures" / "dsl_01.dat"
+    dataset = adapter.from_dat_to_wide_dataset(str(path))
+
+    # Verify reasoning column does not exist
+    assert "reasoning" not in dataset.column_names
+    assert dataset.column_names == ["system", "in", "out"]
+
+
+def test_roundtrip_without_reasoning_column() -> None:
+    """Test roundtrip conversion: .dat (no reasoning) → wide (no column) → .dat"""
+    adapter = DSLAdapter()
+    path = pathlib.Path(__file__).parent / "fixtures" / "dsl_01.dat"
+
+    # Load .dat → wide (should not have reasoning column)
+    wide_dataset = adapter.from_dat_to_wide_dataset(str(path))
+    assert "reasoning" not in wide_dataset.column_names
+
+    # Write wide → .dat
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = pathlib.Path(tmpdir) / "test.dat"
+        adapter.from_wide_dataset_to_dat(wide_dataset, str(tmp_path))
+
+        # Load again
+        wide_dataset2 = adapter.from_dat_to_wide_dataset(str(tmp_path))
+
+    # Verify column still absent and data matches
+    assert "reasoning" not in wide_dataset2.column_names
+    # Pylance: Type of to_list() is partially unknown
+    assert wide_dataset.to_list() == wide_dataset2.to_list()  # type: ignore[reportUnknownMemberType]
+
+
+def test_sort_dat_file_without_reasoning() -> None:
+    """Test sorting .dat file that has no reasoning sections."""
+    adapter = DSLAdapter()
+
+    # Create unsorted .dat without reasoning
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = pathlib.Path(tmpdir) / "test.dat"
+        # Write some unsorted data
+        # Pylance: Type of from_dict() is partially unknown
+        dataset = Dataset.from_dict({  # type: ignore[reportUnknownMemberType]
+            "system": ["prompt1", "prompt1"],
+            "in": ["b", "a"],
+            "out": ["out2", "out1"]
+        })
+        adapter.from_wide_dataset_to_dat(dataset, str(tmp_path))
+
+        # Sort the file
+        adapter.sort_dat_file(str(tmp_path))
+
+        # Verify sorted
+        sorted_dataset = adapter.from_dat_to_wide_dataset(str(tmp_path))
+        # Pylance: Type of to_list() is partially unknown
+        result = sorted_dataset.to_list()  # type: ignore[reportUnknownMemberType]
+        assert result[0]["in"] == "a"
+        assert result[1]["in"] == "b"

@@ -73,7 +73,7 @@ class DSLAdapter(DatasetAdapter):
     Wide-format dataset fields:
         - system (str): system prompt (can be reused or unique)
         - in (str): user input string
-        - reasoning (str): optional reasoning content (empty string if not present)
+        - reasoning (str): optional reasoning content (only present if at least one record has reasoning)
         - out (str): expected DSL output string
 
     Example `.dat` file with reasoning:
@@ -108,7 +108,6 @@ class DSLAdapter(DatasetAdapter):
             {
                 "system": "You are a precise DSL parser.",
                 "in": "set alarm tomorrow at 7am",
-                "reasoning": "",
                 "out": "SET_ALARM(TOMORROW, 7, 0)"
             }
         ]
@@ -152,7 +151,8 @@ class DSLAdapter(DatasetAdapter):
 
         Returns:
             Dataset:
-                A Dataset with four fields: `system`, `in`, `reasoning`, and `out`.
+                A Dataset with three or four fields: `system`, `in`, and `out`, plus
+                `reasoning` (only present if at least one record has reasoning content).
 
         Raises:
             SyntaxError: If the file is malformed (e.g. unpaired question/answer).
@@ -329,13 +329,17 @@ class DSLAdapter(DatasetAdapter):
             raise SyntaxError("File must contain at least one explicit "
                               "system prompt before using '...'.")
 
+        # Check if all reasoning values are empty, and if so, drop the column
+        if all(r == "" for r in flat_data["reasoning"]):
+            del flat_data["reasoning"]
+
         # Pylance: Type of from_dict() is partially unknown
         return Dataset.from_dict(flat_data) # type: ignore[reportUnknownMemberType]
 
     def from_dataset_to_wide_dataset(self, dataset: Dataset) -> Dataset:
         """
         Converts a structured DSL dataset (as 3-message conversations) into a wide-format Dataset
-        with `system`, `in`, `out`, and `reasoning` fields.
+        with `system`, `in`, and `out` fields, plus `reasoning` if at least one record has it.
 
         Each conversation must contain exactly three messages: a system prompt, a user input (the
         text to be converted into a DSL expression) and an assistant output (the parsed DSL
@@ -348,8 +352,8 @@ class DSLAdapter(DatasetAdapter):
 
         Returns:
             Dataset:
-                A wide-format dataset with fields: `system`, `in` (user prompt), `reasoning`
-                (optional reasoning content), and `out` (assistant reply).
+                A wide-format dataset with fields: `system`, `in`, and `out`, plus `reasoning`
+                (only present if at least one record has reasoning content).
 
         Raises:
             ValueError:
@@ -375,6 +379,10 @@ class DSLAdapter(DatasetAdapter):
             flat_data["reasoning"].append(reasoning_content)
 
             flat_data["out"].append(messages[2]["content"])
+
+        # Check if all reasoning values are empty, and if so, drop the column
+        if all(r == "" for r in flat_data["reasoning"]):
+            del flat_data["reasoning"]
 
         # Pylance: Type of from_dict() is partially unknown
         return Dataset.from_dict(flat_data)  # type: ignore[reportUnknownMemberType]
@@ -430,15 +438,15 @@ class DSLAdapter(DatasetAdapter):
                 raise ValueError(f"Split '{split}' is missing required "
                                  f"columns: {required_columns - columns}")
 
-            # Add reasoning column if missing (for backward compatibility)
-            if "reasoning" not in columns:
-                # Create a new column with empty strings
+            # Check if reasoning column exists and all values are empty, then drop it to keep layout compact.
+            # Old Hub datasets that never had a reasoning column will remain without one (backward compatible).
+            # New Hub datasets with all-empty reasoning will have the column removed for a compact layout.
+            if "reasoning" in columns:
                 split_dataset = wide_dataset[split]
-                reasoning_values = [""] * len(split_dataset)
-                # Pylance: Type of add_column() is partially unknown
-                wide_dataset[split] = split_dataset.add_column( # type: ignore[reportUnknownMemberType] # pylint: disable=line-too-long
-                    "reasoning", reasoning_values
-                )
+                reasoning_values = split_dataset["reasoning"]
+                if all(r == "" for r in reasoning_values):
+                    # Remove the column using remove_columns
+                    wide_dataset[split] = split_dataset.remove_columns(["reasoning"])
 
         return wide_dataset
 
@@ -448,7 +456,8 @@ class DSLAdapter(DatasetAdapter):
 
         Args:
             wide_dataset (Dataset):
-                Dataset with `system`, `in`, `reasoning`, and `out` fields.
+                Dataset with `system`, `in`, and `out` fields. May optionally include
+                `reasoning` field if at least one record has reasoning content.
 
         Returns:
             JsonConversation:
@@ -486,14 +495,15 @@ class DSLAdapter(DatasetAdapter):
 
         Args:
             wide_dataset (Dataset):
-                Dataset with `system`, `in`, `reasoning`, and `out` fields.
+                Dataset with `system`, `in`, and `out` fields. May optionally include
+                `reasoning` field if at least one record has reasoning content.
 
             dat_filename (str):
                 Output path for the DAT file.
 
         Consecutive rows with the same system prompt are collapsed using
         `$ ...` to avoid repetition. Reasoning is written as a `?` section
-        between input and output if present.
+        between input and output if present and non-empty.
         """
         def write_section(fh: TextIO, tag: str, text: str) -> None:
             if "\n" in text:
@@ -527,13 +537,14 @@ class DSLAdapter(DatasetAdapter):
 
         This helper function casts each item in the dataset to a `Dict[str, str]` to enable
         static type checking and clean field access (`record["system"]`, `record["in"]`,
-        `record["reasoning"]`, `record["out"]`), which are expected fields in wide-format DSL
-        datasets.
+        `record["out"]`, and optionally `record.get("reasoning", "")`). The `reasoning` field
+        may or may not be present in the dataset depending on whether any record contains reasoning.
 
         Args:
             dataset (Dataset):
                 A Hugging Face Dataset where each row is expected to contain
-                string fields `"system"`, `"in"`, `"reasoning"`, and `"out"`.
+                string fields `"system"`, `"in"`, and `"out"`. May optionally include
+                `"reasoning"` field if at least one record has reasoning content.
 
         Returns:
             Iterator[Dict[str, str]]:
@@ -553,5 +564,9 @@ class DSLAdapter(DatasetAdapter):
                 `in`, `reasoning`, and `out` fields, and written back to the same location.
         """
         dataset = self.from_dat_to_wide_dataset(dat_filename)
-        sorted_dataset = dataset.sort(["system", "in", "reasoning", "out"])
+        sort_keys = ["system", "in"]
+        if "reasoning" in dataset.column_names:
+            sort_keys.append("reasoning")
+        sort_keys.append("out")
+        sorted_dataset = dataset.sort(sort_keys)
         self.from_wide_dataset_to_dat(sorted_dataset, dat_filename)
