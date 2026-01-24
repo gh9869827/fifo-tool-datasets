@@ -438,8 +438,10 @@ class DSLAdapter(DatasetAdapter):
                 raise ValueError(f"Split '{split}' is missing required "
                                  f"columns: {required_columns - columns}")
 
-            # Add reasoning column if missing (for backward compatibility with older datasets)
-            # After adding it, check if all values are empty and drop it if so
+            # Add reasoning column if missing (for backward compatibility with datasets
+            # uploaded to the Hub before the reasoning column optimization was implemented)
+            # After adding it, check if all values are empty and drop it if so to maintain
+            # a consistent compact layout regardless of whether the dataset is old or new
             if "reasoning" not in columns:
                 # Create a new column with empty strings
                 split_dataset = wide_dataset[split]
@@ -449,7 +451,9 @@ class DSLAdapter(DatasetAdapter):
                     "reasoning", reasoning_values
                 )
             
-            # Check if all reasoning values are empty and drop the column to keep layout compact
+            # Check if all reasoning values are empty and drop the column to keep layout compact.
+            # This optimization applies to both old datasets (after adding the column above) and
+            # new datasets that may already have an empty reasoning column.
             split_dataset = wide_dataset[split]
             if "reasoning" in split_dataset.column_names:
                 reasoning_values = split_dataset["reasoning"]
