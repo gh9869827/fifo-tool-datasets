@@ -436,9 +436,6 @@ class DatasetAdapter(ABC):
             filename (str):
                 Path to the input DAT file.
 
-            seed (int | None):
-                Seed for deterministic shuffling (optional).
-
         Returns:
             Dataset:
                 The parsed Dataset object.
